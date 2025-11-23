@@ -8,6 +8,10 @@
     "dev:backend": "pnpm --filter nexus-backend dev",
     "lint:frontend": "pnpm --filter nexus-frontend lint",
     "build:frontend": "pnpm --filter nexus-frontend build",
+    "db:generate": "drizzle-kit generate",
     "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.22.8"
   }
 }

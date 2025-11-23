@@ -67,6 +67,7 @@ export default function Page() {
   const [username, setUsername] = useState(DEMO_USERNAME);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [keyfileToken, setKeyfileToken] = useState(DEMO_KEYFILE ?? "");
+  const [activeUser, setActiveUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
@@ -165,8 +166,9 @@ export default function Page() {
     }
   };
 
-  const hydrateWorkspace = async (token: string) => {
+  const hydrateWorkspace = async (token: string, activeUsername: string) => {
     setSessionToken(token);
+    setActiveUser(activeUsername);
     const projectData = await fetchProjects(token);
     const mappedProjects = projectData.map((p) => ({
       id: p.id,
@@ -196,11 +198,12 @@ export default function Page() {
       try {
         const { token } = await login(DEMO_USERNAME, DEMO_PASSWORD, DEMO_KEYFILE || undefined);
         if (cancelled) return;
-        await hydrateWorkspace(token);
+        await hydrateWorkspace(token, DEMO_USERNAME);
       } catch (err) {
         if (!cancelled) {
           setError("Using mock data (backend unreachable)");
           setSessionToken(null);
+          setActiveUser(null);
           setProjects(mockProjects);
           setRoadmaps(mockRoadmaps);
           setChats(mockChats);
@@ -235,10 +238,11 @@ export default function Page() {
     setError(null);
     try {
       const { token } = await login(username, password, keyfileToken || undefined);
-      await hydrateWorkspace(token);
+      await hydrateWorkspace(token, username);
     } catch (err) {
       setError("Login failed; using mock data");
       setSessionToken(null);
+      setActiveUser(null);
       setProjects(mockProjects);
       setRoadmaps(mockRoadmaps);
       setChats(mockChats);
@@ -301,9 +305,14 @@ export default function Page() {
             value={keyfileToken}
             onChange={(e) => setKeyfileToken(e.target.value)}
           />
-          <button className="tab" onClick={handleLoginSubmit} disabled={loading}>
+          <button className="tab" onClick={handleLoginSubmit} disabled={loading || !username}>
             {loading ? "Loading…" : "Login"}
           </button>
+        </div>
+        <div className="item-subtle">
+          {activeUser && sessionToken
+            ? `Active user: ${activeUser} (token ${sessionToken.slice(0, 6)}…)`
+            : "Active user: none (mock data)"}
         </div>
       </div>
       <div className="columns">

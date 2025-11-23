@@ -128,6 +128,9 @@ pnpm dev:backend   # http://localhost:3001
 pnpm dev:frontend
 ```
 
+> Heads-up: `pnpm` is installed locally at `~/.local/node_modules/.bin/pnpm`. If your shell cannot find it, run  
+> `export PATH="$HOME/.local/node_modules/.bin:$PATH"`.
+
 You will need:
 - an LLM key (OpenAI/Anthropic/Qwen)
 - configured project directories
@@ -137,6 +140,19 @@ Tests:
 ```bash
 pnpm --filter @nexus/shared test
 ```
+
+TypeScript/TS server:
+- Project-local compiler: `pnpm --filter nexus-backend exec tsc -p tsconfig.json`
+- Generic one-shot: `pnpm --package=typescript dlx tsc -p apps/backend/tsconfig.json`
+Both commands exit silently with code 0 when type checks pass.
+
+Database:
+- Set `DATABASE_URL` in `.env` to a Postgres instance.
+- Generate migrations from the shared schema: `pnpm exec drizzle-kit generate` (writes to `packages/shared/db/migrations`).
+- Apply migrations with your preferred tool (e.g., `drizzle-kit push` or `psql`).
+
+Frontend ↔ Backend:
+- The mock UI will attempt to `POST /api/auth/login` then `GET /api/projects` using `NEXT_PUBLIC_BACKEND_HTTP_BASE` (defaults to `http://localhost:3001`). If unreachable, it falls back to mock data and shows a notice.
 
 ---
 

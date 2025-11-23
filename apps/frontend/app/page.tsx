@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchProjects } from "../lib/api";
 
 type Status = "inactive" | "waiting" | "active" | "blocked" | "done";
 
-const projects = [
+const mockProjects = [
   { name: "Atlas Compute", category: "Infra", status: "active" as Status, info: "LLM orchestration spine" },
   { name: "Nexus", category: "Product", status: "waiting" as Status, info: "Multi-agent cockpit" },
   { name: "Helios", category: "Research", status: "inactive" as Status, info: "Offline eval bench" },
@@ -32,7 +33,40 @@ const statusColor: Record<Status, string> = {
 };
 
 export default function Page() {
+  const [projects, setProjects] = useState<typeof mockProjects>(mockProjects);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchProjects();
+        if (cancelled) return;
+        const mapped = data.map((p) => ({
+          name: p.name,
+          category: p.category ?? "Uncategorized",
+          status: (p.status as Status) ?? "active",
+          info: p.description ?? "",
+        }));
+        setProjects(mapped);
+      } catch (err) {
+        if (!cancelled) {
+          setError("Using mock data (backend unreachable)");
+          setProjects(mockProjects);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const tabBody = useMemo(() => {
     switch (activeTab) {
@@ -71,6 +105,8 @@ export default function Page() {
             <span>Projects</span>
             <input className="filter" placeholder="Filter" />
           </header>
+          {loading && <div className="item-subtle">Loading projects…</div>}
+          {error && <div className="item-subtle">{error}</div>}
           <div className="list">
             {projects.map((p) => (
               <div className="item" key={p.name}>

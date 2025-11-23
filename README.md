@@ -157,6 +157,8 @@ Auth:
 - When the database is enabled, `/auth/login` will create a user on first login; the first provided password becomes the stored hash.
 - If a user already has a password set, a password is required for login; otherwise the route rejects with 401.
 - Sessions persist in the database; without `DATABASE_URL` the backend falls back to in-memory sessions (cleared on restart).
+- Passwords are hashed with salted PBKDF2 (legacy SHA256 hashes still verify); optional `keyfileToken` login is also hashed and stored.
+- Sessions expire after 7 days and expired DB tokens are cleaned up automatically during validation.
 
 Frontend ↔ Backend:
 - The mock UI will attempt to `POST /api/auth/login` then `GET /api/projects` using `NEXT_PUBLIC_BACKEND_HTTP_BASE` (defaults to `http://localhost:3001`). If unreachable, it falls back to mock data and shows a notice.

@@ -140,6 +140,7 @@ You will need:
 - **AGENTS.md** – agent behavior and JSON protocols
 - **ROADMAP.md** – strategic goals and future direction
 - **TASKS.md** – actionable task breakdown
+- **IMPLEMENTATION.md** – concrete setup and delivery plan
 
 ---
 

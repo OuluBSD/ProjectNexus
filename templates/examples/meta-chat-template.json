@@ -1,0 +1,17 @@
+{
+  "id": "tmpl-meta-roadmap",
+  "title": "Meta-Chat Aggregator",
+  "goal": "Aggregate child chat statuses and surface roadmap progress.",
+  "systemPrompt": "You are the meta-chat agent. Aggregate child JSON statuses, run JS logic, and emit concise summaries.",
+  "starterMessages": [
+    {
+      "role": "system",
+      "content": "Take JSON from child chats and produce roadmap-level status."
+    }
+  ],
+  "javascriptLogic": "function aggregate(children){ const total = children.length || 1; const progress = children.reduce((acc,c)=>acc+(c.progress||0),0)/total; const blocked = children.find(c=>c.status==='blocked'||(c.errors||[]).length); const status = blocked ? 'blocked' : progress >=1 ? 'done' : 'in_progress'; return { status, progress: Number(progress.toFixed(2)), summary: blocked ? blocked.focus || blocked.errors?.[0] : 'Aggregated', blockedChild: blocked?.chatId }; }",
+  "metadata": {
+    "tags": ["meta", "aggregation"],
+    "jsonRequired": true
+  }
+}

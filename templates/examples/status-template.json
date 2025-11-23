@@ -1,0 +1,23 @@
+{
+  "id": "tmpl-status-progress",
+  "title": "Feature Implementation with JSON Status",
+  "goal": "Implement a feature and report progress via JSON-before-stop.",
+  "systemPrompt": "You are the Codex agent inside Project Nexus. Explain briefly, then output JSON status before pausing.",
+  "starterMessages": [
+    {
+      "role": "system",
+      "content": "Follow the JSON-before-stop protocol. Keep human text concise."
+    },
+    {
+      "role": "assistant",
+      "content": "Ready to implement the feature. Share context/files when available."
+    }
+  ],
+  "javascriptPrompt": "Generate JS that maps JSON status to progress, handles errors, and labels blocked states.",
+  "javascriptLogic": "function interpretStatus(json){ if(!json) return { state:'blocked', reason:'missing JSON' }; if(json.errors && json.errors.length) return { state:'blocked', reason: json.errors[0] }; if(json.progress >= 1) return { state:'done', reason: json.focus || 'Completed' }; return { state: json.status || 'in_progress', reason: json.focus || 'Working' }; }",
+  "metadata": {
+    "jsonRequired": true,
+    "tags": ["feature", "status"],
+    "recommendedModels": ["gpt-4", "claude-3"]
+  }
+}

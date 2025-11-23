@@ -42,6 +42,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 80vh;
+  min-width: 0;
 }
 
 .column-header {
@@ -84,11 +85,13 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .item-title {
   font-weight: 700;
   flex: 1;
+  min-width: 0;
 }
 
 .item-pill {

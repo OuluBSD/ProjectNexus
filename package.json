@@ -12,6 +12,6 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.22.8"
+    "drizzle-kit": "^0.31.7"
   }
 }

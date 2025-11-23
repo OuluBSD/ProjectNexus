@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { store } from "../services/mockStore";
 import {
   getSessionWithUser,
+  purgeExpiredSessions,
   type Database,
 } from "../services/authRepository";
+import { store } from "../services/mockStore";
 
 function extractToken(request: FastifyRequest) {
   const header = request.headers["authorization"];
@@ -17,6 +18,7 @@ async function resolveSession(
 ) {
   if (fastify.db) {
     try {
+      await purgeExpiredSessions(fastify.db);
       const session = await getSessionWithUser(fastify.db, token);
       if (session) return session;
     } catch (err) {

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@nexus/shared/db/schema";
 import type { Session } from "../types";
@@ -7,6 +7,9 @@ import type { Session } from "../types";
 export type Database = NodePgDatabase<typeof schema>;
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+const PBKDF2_ITERATIONS = 120000;
+const PBKDF2_KEYLEN = 32;
+const PBKDF2_DIGEST = "sha256";
 
 function mapSession(
   sessionRow: typeof schema.sessions.$inferSelect,
@@ -15,8 +18,30 @@ function mapSession(
   return { token: sessionRow.token, userId: userRow.id, username: userRow.username };
 }
 
-function hashPassword(password: string) {
-  return crypto.createHash("sha256").update(password).digest("hex");
+function legacyHash(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function hashSecret(secret: string) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto
+    .pbkdf2Sync(secret, salt, PBKDF2_ITERATIONS, PBKDF2_KEYLEN, PBKDF2_DIGEST)
+    .toString("hex");
+  return `pbkdf2_${PBKDF2_DIGEST}$${PBKDF2_ITERATIONS}$${salt}$${derived}`;
+}
+
+function verifySecret(secret: string, stored?: string | null) {
+  if (!stored) return false;
+  if (stored.startsWith("pbkdf2_")) {
+    const [, iterations, salt, hash] = stored.split("$");
+    if (!iterations || !salt || !hash) return false;
+    const derived = crypto
+      .pbkdf2Sync(secret, salt, Number(iterations), PBKDF2_KEYLEN, PBKDF2_DIGEST)
+      .toString("hex");
+    return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(derived, "hex"));
+  }
+  // Legacy sha256 support
+  return legacyHash(secret) === stored;
 }
 
 export async function getUserByUsername(db: Database, username: string) {
@@ -27,7 +52,7 @@ export async function getUserByUsername(db: Database, username: string) {
 export async function createUser(db: Database, username: string, password?: string) {
   const [row] = await db
     .insert(schema.users)
-    .values({ username, passwordHash: password ? hashPassword(password) : undefined })
+    .values({ username, passwordHash: password ? hashSecret(password) : undefined })
     .returning();
   return row;
 }
@@ -35,8 +60,12 @@ export async function createUser(db: Database, username: string, password?: stri
 export async function updateUserPassword(db: Database, userId: string, password: string) {
   await db
     .update(schema.users)
-    .set({ passwordHash: hashPassword(password) })
+    .set({ passwordHash: hashSecret(password) })
     .where(eq(schema.users.id, userId));
+}
+
+export async function updateUserKeyfile(db: Database, userId: string, token: string) {
+  await db.update(schema.users).set({ keyfilePath: hashSecret(token) }).where(eq(schema.users.id, userId));
 }
 
 export async function createSession(db: Database, userId: string) {
@@ -53,6 +82,10 @@ export async function createSession(db: Database, userId: string) {
 
 export async function deleteSession(db: Database, token: string) {
   await db.delete(schema.sessions).where(eq(schema.sessions.token, token));
+}
+
+export async function purgeExpiredSessions(db: Database) {
+  await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date()));
 }
 
 export async function getSessionWithUser(db: Database, token: string): Promise<Session | null> {
@@ -75,5 +108,10 @@ export async function getSessionWithUser(db: Database, token: string): Promise<S
 
 export function verifyPassword(password: string, passwordHash?: string | null) {
   if (!passwordHash) return true;
-  return hashPassword(password) === passwordHash;
+  return verifySecret(password, passwordHash);
+}
+
+export function verifyKeyfile(token: string, keyfileHash?: string | null) {
+  if (!keyfileHash) return false;
+  return verifySecret(token, keyfileHash);
 }

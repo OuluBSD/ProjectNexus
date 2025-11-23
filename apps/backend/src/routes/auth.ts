@@ -4,7 +4,10 @@ import {
   createUser,
   deleteSession as dbDeleteSession,
   getUserByUsername,
+  purgeExpiredSessions,
   updateUserPassword,
+  updateUserKeyfile,
+  verifyKeyfile,
   verifyPassword,
 } from "../services/authRepository";
 import { createSession, store } from "../services/mockStore";
@@ -20,24 +23,50 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (fastify.db) {
       try {
+        await purgeExpiredSessions(fastify.db);
         const existing = await getUserByUsername(fastify.db, body.username);
-        if (existing?.passwordHash) {
-          if (!body.password) {
-            reply.code(401).send({ error: { code: "unauthorized", message: "Password required" } });
-            return;
-          }
-          if (!verifyPassword(body.password, existing.passwordHash)) {
+        const passwordValid =
+          !!existing?.passwordHash && !!body.password && verifyPassword(body.password, existing.passwordHash);
+        const keyfileValid =
+          !!existing?.keyfilePath && !!body.keyfileToken && verifyKeyfile(body.keyfileToken, existing.keyfilePath);
+
+        if (existing) {
+          const needsPassword = !!existing.passwordHash;
+          const needsKeyfile = !!existing.keyfilePath;
+          const authenticated = passwordValid || keyfileValid || (!needsPassword && !needsKeyfile);
+
+          if (!authenticated) {
             reply
               .code(401)
-              .send({ error: { code: "unauthorized", message: "Invalid username or password" } });
+              .send({ error: { code: "unauthorized", message: "Invalid credentials for user" } });
             return;
           }
+
+          if (!existing.passwordHash && body.password) {
+            await updateUserPassword(fastify.db, existing.id, body.password);
+          }
+          if (!existing.keyfilePath && body.keyfileToken) {
+            await updateUserKeyfile(fastify.db, existing.id, body.keyfileToken);
+          }
+
+          const sessionRow = await dbCreateSession(fastify.db, existing.id);
+          reply.send({
+            token: sessionRow.token,
+            user: { id: existing.id, username: existing.username },
+          });
+          return;
         }
 
-        const userRow =
-          existing ?? (await createUser(fastify.db, body.username, body.password));
-        if (existing && !existing.passwordHash && body.password) {
-          await updateUserPassword(fastify.db, existing.id, body.password);
+        if (!body.password && !body.keyfileToken) {
+          reply
+            .code(400)
+            .send({ error: { code: "bad_request", message: "Provide a password or keyfileToken" } });
+          return;
+        }
+
+        const userRow = await createUser(fastify.db, body.username, body.password);
+        if (body.keyfileToken) {
+          await updateUserKeyfile(fastify.db, userRow.id, body.keyfileToken);
         }
 
         const sessionRow = await dbCreateSession(fastify.db, userRow.id);

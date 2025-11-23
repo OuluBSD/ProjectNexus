@@ -1,0 +1,12 @@
+{
+  "name": "nexus-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev:frontend": "pnpm --filter nexus-frontend dev",
+    "lint:frontend": "pnpm --filter nexus-frontend lint",
+    "build:frontend": "pnpm --filter nexus-frontend build",
+    "test": "pnpm -r test"
+  }
+}

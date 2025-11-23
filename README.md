@@ -123,14 +123,14 @@ For endpoint-level details, see `ARCHITECTURE.md`.
 
 # 🚀 Getting Started (Development)
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev:frontend
 ```
 
 You will need:
 - an LLM key (OpenAI/Anthropic/Qwen)
 - configured project directories
-- database setup (Prisma/Drizzle)
+- database setup (Drizzle/Postgres)
 
 ---
 

@@ -12,6 +12,15 @@ type ChatInput = Partial<Chat>;
 type TemplateInput = Partial<Template>;
 type MessageInput = Pick<Message, "role" | "content" | "metadata">;
 
+function deriveStatus(statuses: string[]) {
+  if (statuses.length === 0) return "idle";
+  if (statuses.every((status) => status === "done")) return "done";
+  if (statuses.some((status) => status === "blocked")) return "blocked";
+  if (statuses.some((status) => status === "error")) return "error";
+  if (statuses.some((status) => status === "waiting")) return "waiting";
+  return "in_progress";
+}
+
 function mapProject(row: typeof schema.projects.$inferSelect): Project {
   return {
     id: row.id,
@@ -287,6 +296,36 @@ export async function dbUpdateChat(
     .where(eq(schema.chats.id, chatId))
     .returning();
   return row ? mapChat(row) : null;
+}
+
+export async function dbSyncMetaFromChats(db: Database, roadmapId: string): Promise<MetaChat | null> {
+  const chats = await db
+    .select()
+    .from(schema.chats)
+    .where(eq(schema.chats.roadmapListId, roadmapId));
+  const progress =
+    chats.length === 0
+      ? 0
+      : chats.reduce((sum, chat) => sum + Number(chat.progress ?? 0), 0) / chats.length;
+  const status = deriveStatus(chats.map((chat) => chat.status ?? "in_progress"));
+
+  const [metaRow] = await db
+    .update(schema.metaChats)
+    .set({
+      progress: String(progress),
+      status,
+      summary: `Aggregated from ${chats.length} chats`,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.metaChats.roadmapListId, roadmapId))
+    .returning();
+
+  await db
+    .update(schema.roadmapLists)
+    .set({ progress: String(progress), status, updatedAt: new Date() })
+    .where(eq(schema.roadmapLists.id, roadmapId));
+
+  return metaRow ? mapMetaChat(metaRow) : null;
 }
 
 export async function dbAddMessage(

@@ -4,9 +4,10 @@ import {
   dbCreateChat,
   dbGetMessages,
   dbListChats,
+  dbSyncMetaFromChats,
   dbUpdateChat,
 } from "../services/projectRepository";
-import { addMessage, createChat, getMessages, listChats, updateChat } from "../services/mockStore";
+import { addMessage, createChat, getMessages, listChats, syncRoadmapMeta, updateChat } from "../services/mockStore";
 import { requireSession } from "../utils/auth";
 
 export const chatRoutes: FastifyPluginAsync = async (fastify) => {
@@ -34,6 +35,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
           roadmapId,
           (request.body as Record<string, unknown>) ?? {},
         );
+        await dbSyncMetaFromChats(fastify.db, roadmapId);
         reply.code(201).send({ id: chat.id });
         return;
       } catch (err) {
@@ -41,6 +43,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
     const chat = createChat(roadmapId, (request.body as Record<string, unknown>) ?? {});
+    syncRoadmapMeta(roadmapId);
     reply.code(201).send({ id: chat.id });
   });
 
@@ -57,6 +60,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     if (fastify.db) {
       try {
         const chat = await dbCreateChat(fastify.db, roadmapId, payload);
+        await dbSyncMetaFromChats(fastify.db, roadmapId);
         reply.code(201).send({ id: chat.id });
         return;
       } catch (err) {
@@ -64,6 +68,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
     const chat = createChat(roadmapId, payload);
+    syncRoadmapMeta(roadmapId);
     reply.code(201).send({ id: chat.id });
   });
 
@@ -82,6 +87,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
           return;
         }
         reply.send(updated);
+        await dbSyncMetaFromChats(fastify.db, updated.roadmapListId);
         return;
       } catch (err) {
         fastify.log.error({ err }, "Failed to update chat in database; falling back to memory.");
@@ -93,6 +99,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
     reply.send(updated);
+    syncRoadmapMeta(updated.roadmapListId);
   });
 
   fastify.get("/chats/:chatId/messages", async (request, reply) => {
@@ -150,6 +157,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
           return;
         }
         reply.send(updated);
+        await dbSyncMetaFromChats(fastify.db, updated.roadmapListId);
         return;
       } catch (err) {
         fastify.log.error({ err }, "Failed to update chat status in database; falling back to memory.");
@@ -161,5 +169,6 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
     reply.send(updated);
+    syncRoadmapMeta(updated.roadmapListId);
   });
 };

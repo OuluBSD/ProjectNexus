@@ -35,6 +35,15 @@ export const store: Store = {
   terminalSessions: new Map(),
 };
 
+function deriveStatus(statuses: string[]) {
+  if (statuses.length === 0) return "idle";
+  if (statuses.every((status) => status === "done")) return "done";
+  if (statuses.some((status) => status === "blocked")) return "blocked";
+  if (statuses.some((status) => status === "error")) return "error";
+  if (statuses.some((status) => status === "waiting")) return "waiting";
+  return "in_progress";
+}
+
 const defaultProjectId = crypto.randomUUID();
 const defaultRoadmapId = crypto.randomUUID();
 const defaultMetaChatId = crypto.randomUUID();
@@ -196,6 +205,23 @@ export function getMetaChat(roadmapId: string) {
 
 export function listChats(roadmapId: string) {
   return Array.from(store.chats.values()).filter((c) => c.roadmapListId === roadmapId);
+}
+
+export function syncRoadmapMeta(roadmapId: string) {
+  const chats = listChats(roadmapId);
+  const progress =
+    chats.length === 0
+      ? 0
+      : chats.reduce((sum, chat) => sum + (chat.progress ?? 0), 0) / chats.length;
+  const status = deriveStatus(chats.map((chat) => chat.status ?? "in_progress"));
+  const meta = getMetaChat(roadmapId);
+  if (meta) {
+    store.metaChats.set(meta.id, { ...meta, progress, status, summary: `Aggregated from ${chats.length} chats` });
+  }
+  const roadmap = store.roadmapLists.get(roadmapId);
+  if (roadmap) {
+    store.roadmapLists.set(roadmapId, { ...roadmap, progress, status });
+  }
 }
 
 export function createChat(roadmapListId: string, payload: Partial<Chat>) {

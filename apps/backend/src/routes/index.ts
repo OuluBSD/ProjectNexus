@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { authRoutes } from "./auth";
 import { chatRoutes } from "./chats";
+import { auditRoutes } from "./audit";
 import { fileRoutes } from "./files";
 import { projectRoutes } from "./projects";
 import { roadmapRoutes } from "./roadmaps";
@@ -15,4 +16,5 @@ export const registerRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(templateRoutes);
   await fastify.register(fileRoutes);
   await fastify.register(terminalRoutes);
+  await fastify.register(auditRoutes);
 };

@@ -11,6 +11,7 @@ import {
   fetchRoadmapStatus,
   fetchRoadmaps,
   login,
+  fetchAuditEvents,
   sendTerminalInput,
 } from "../lib/api";
 
@@ -32,6 +33,7 @@ type RoadmapItem = {
   summary?: string;
 };
 type ChatItem = { id?: string; title: string; status: Status; progress: number; note?: string; meta?: boolean };
+type AuditEvent = { id: string; eventType: string; path?: string | null; createdAt: string; sessionId?: string | null };
 
 const mockProjects: ProjectItem[] = [
   { name: "Atlas Compute", category: "Infra", status: "active", info: "LLM orchestration spine" },
@@ -97,6 +99,8 @@ export default function Page() {
   const [fsContent, setFsContent] = useState<string>("");
   const [fsLoading, setFsLoading] = useState(false);
   const [fsError, setFsError] = useState<string | null>(null);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   const ensureStatus = async (roadmapId: string, token: string) => {
     const existing = roadmapStatus[roadmapId];
@@ -475,6 +479,26 @@ export default function Page() {
     }
   }, [sessionToken, selectedProjectId]);
 
+  const loadAuditLog = async (projectId?: string) => {
+    if (!sessionToken) return;
+    try {
+      const { events } = await fetchAuditEvents(sessionToken, projectId, 50);
+      setAuditEvents(events);
+      setAuditError(null);
+    } catch (err) {
+      setAuditEvents([]);
+      setAuditError(err instanceof Error ? err.message : "Failed to load audit events");
+    }
+  };
+
+  useEffect(() => {
+    if (sessionToken) {
+      loadAuditLog(selectedProjectId ?? undefined);
+    } else {
+      setAuditEvents([]);
+    }
+  }, [sessionToken, selectedProjectId]);
+
   const tabBody = (() => {
     switch (activeTab) {
       case "Terminal":
@@ -688,6 +712,26 @@ export default function Page() {
             </div>
           </header>
           <div className="panel-body">{tabBody}</div>
+        </div>
+      </div>
+
+      <div className="panel-card" style={{ marginTop: 12 }}>
+        <div className="panel-title">Recent Activity</div>
+        <div className="panel-text">Latest file/terminal actions (backend DB required).</div>
+        {auditError && <div className="item-subtle" style={{ color: "#EF4444" }}>{auditError}</div>}
+        <div className="list" style={{ maxHeight: 260, overflow: "auto" }}>
+          {auditEvents.length === 0 && <div className="item-subtle">No audit events yet.</div>}
+          {auditEvents.map((event) => (
+            <div className="item" key={event.id}>
+              <div className="item-line">
+                <span className="item-title">{event.eventType}</span>
+                <span className="item-subtle">
+                  {new Date(event.createdAt).toLocaleTimeString()}
+                </span>
+              </div>
+              <div className="item-sub">{event.path ?? event.sessionId ?? "N/A"}</div>
+            </div>
+          ))}
         </div>
       </div>
     </main>

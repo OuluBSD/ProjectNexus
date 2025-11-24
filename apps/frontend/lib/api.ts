@@ -117,3 +117,14 @@ export function buildTerminalWsUrl(token: string, sessionId: string) {
   const url = `${wsBase}/api/terminal/sessions/${sessionId}/stream?token=${encodeURIComponent(token)}`;
   return url;
 }
+
+export async function fetchAuditEvents(
+  token: string,
+  projectId?: string,
+  limit = 50
+): Promise<{ events: { id: string; eventType: string; path?: string | null; createdAt: string; sessionId?: string | null }[] }> {
+  const params = new URLSearchParams();
+  if (projectId) params.set("projectId", projectId);
+  if (limit) params.set("limit", String(limit));
+  return fetchWithAuth(token, `/api/audit/events?${params.toString()}`);
+}

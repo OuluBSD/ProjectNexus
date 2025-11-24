@@ -4,7 +4,8 @@ import { afterEach, test } from "node:test";
 import { authRoutes, loginThrottleState } from "../routes/auth";
 import * as authRepo from "../services/authRepository";
 import * as schema from "@nexus/shared/db/schema";
-import { validateToken } from "../utils/auth";
+import { requireSession, validateToken } from "../utils/auth";
+import { createSession, store } from "../services/mockStore";
 import { mock } from "node:test";
 
 afterEach(() => {
@@ -182,4 +183,72 @@ test("throttle unblocks after block window elapses", async () => {
     loginThrottleState.attempts.clear();
     await app.close();
   }
+});
+
+test("requireSession returns 401 when no authorization is provided", async () => {
+  const app = Fastify({ logger: false });
+  app.get("/secure", async (request, reply) => {
+    const session = await requireSession(request, reply);
+    if (!session) return;
+    return { ok: true };
+  });
+  await app.ready();
+
+  const res = await app.inject({ method: "GET", url: "/secure" });
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.json(), {
+    error: { code: "unauthorized", message: "Missing or invalid session" },
+  });
+
+  await app.close();
+});
+
+test("requireSession falls back to memory sessions when database lookup fails", async () => {
+  const app = Fastify({ logger: false });
+  const session = createSession("fallback-user");
+
+  app.decorate("db", {
+    delete: () => {
+      throw new Error("db offline");
+    },
+  });
+  app.get("/secure", async (request, reply) => {
+    const resolved = await requireSession(request, reply);
+    if (!resolved) return;
+    return { token: resolved.token, username: resolved.username };
+  });
+  await app.ready();
+
+  try {
+    const res = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.json(), { token: session.token, username: session.username });
+  } finally {
+    store.sessions.delete(session.token);
+    await app.close();
+  }
+});
+
+test("validateToken uses memory store when database returns no session", async () => {
+  const session = createSession("memory-user");
+  const errors: unknown[] = [];
+
+  const fastifyLike = {
+    db: {
+      delete: () => {
+        throw new Error("db offline");
+      },
+    },
+    log: { error: (err: unknown) => errors.push(err) },
+  } as any;
+  const resolved = await validateToken(fastifyLike, session.token);
+
+  assert.ok(errors.length >= 1, "database failure should be logged before falling back");
+  assert.equal(resolved?.token, session.token);
+  assert.equal(resolved?.username, session.username);
+  store.sessions.delete(session.token);
 });

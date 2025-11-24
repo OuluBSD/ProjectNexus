@@ -30,15 +30,63 @@ export async function login(
 
 export async function fetchProjects(
   token: string
-): Promise<{ id: string; name: string; category?: string; status: string; description?: string }[]> {
+): Promise<
+  { id: string; name: string; category?: string; status: string; description?: string }[]
+> {
   return fetchWithAuth(token, "/api/projects");
+}
+
+export async function createProject(
+  token: string,
+  payload: { name: string; category?: string; status?: string; description?: string }
+): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/api/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create project (${res.status})`);
+  }
+  return res.json();
 }
 
 export async function fetchRoadmaps(
   token: string,
   projectId: string
-): Promise<{ id: string; title: string; progress: number; status: string; tags: string[]; metaChatId?: string }[]> {
+): Promise<
+  {
+    id: string;
+    title: string;
+    progress: number;
+    status: string;
+    tags: string[];
+    metaChatId?: string;
+  }[]
+> {
   return fetchWithAuth(token, `/api/projects/${projectId}/roadmaps`);
+}
+
+export async function createRoadmap(
+  token: string,
+  projectId: string,
+  payload: { title: string; tags?: string[]; progress?: number; status?: string }
+): Promise<{ id: string; metaChatId?: string }> {
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/roadmaps`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create roadmap (${res.status})`);
+  }
+  return res.json();
 }
 
 export async function fetchRoadmapStatus(
@@ -55,12 +103,40 @@ export async function fetchChats(
   return fetchWithAuth(token, `/api/roadmaps/${roadmapId}/chats`);
 }
 
+export async function createChat(
+  token: string,
+  roadmapId: string,
+  payload: {
+    title: string;
+    goal?: string;
+    status?: string;
+    progress?: number;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/api/roadmaps/${roadmapId}/chats`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create chat (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchFileTree(
   token: string,
   projectId: string,
   path = "."
 ): Promise<{ path: string; entries: { type: "dir" | "file"; name: string }[] }> {
-  return fetchWithAuth(token, `/api/fs/tree?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`);
+  return fetchWithAuth(
+    token,
+    `/api/fs/tree?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`
+  );
 }
 
 export async function fetchFileContent(

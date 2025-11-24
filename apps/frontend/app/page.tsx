@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -11,13 +11,24 @@ import {
   fetchRoadmapStatus,
   fetchRoadmaps,
   fetchFileDiff,
+  createProject,
+  createRoadmap,
+  createChat,
   writeFileContent,
   login,
   fetchAuditEvents,
   sendTerminalInput,
 } from "../lib/api";
 
-type Status = "inactive" | "waiting" | "active" | "blocked" | "done" | "in_progress" | "idle" | "error";
+type Status =
+  | "inactive"
+  | "waiting"
+  | "active"
+  | "blocked"
+  | "done"
+  | "in_progress"
+  | "idle"
+  | "error";
 const DEMO_USERNAME = process.env.NEXT_PUBLIC_DEMO_USERNAME ?? "demo";
 const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "demo";
 const DEMO_KEYFILE = process.env.NEXT_PUBLIC_DEMO_KEYFILE_TOKEN;
@@ -34,7 +45,14 @@ type RoadmapItem = {
   metaChatId?: string;
   summary?: string;
 };
-type ChatItem = { id?: string; title: string; status: Status; progress: number; note?: string; meta?: boolean };
+type ChatItem = {
+  id?: string;
+  title: string;
+  status: Status;
+  progress: number;
+  note?: string;
+  meta?: boolean;
+};
 type AuditEvent = {
   id: string;
   eventType: string;
@@ -47,25 +65,26 @@ type AuditEvent = {
   metadata?: Record<string, unknown> | null;
 };
 type ToastMessage = { message: string; detail?: string; tone: "success" | "error" };
-
-const mockProjects: ProjectItem[] = [
-  { name: "Atlas Compute", category: "Infra", status: "active", info: "LLM orchestration spine" },
-  { name: "Nexus", category: "Product", status: "waiting", info: "Multi-agent cockpit" },
-  { name: "Helios", category: "Research", status: "inactive", info: "Offline eval bench" },
-];
-
-const mockRoadmaps: RoadmapItem[] = [
-  { title: "MVP Core", tags: ["api", "db"], progress: 0.42, status: "active" },
-  { title: "Templates", tags: ["prompt", "js"], progress: 0.18, status: "waiting" },
-  { title: "Terminal", tags: ["pty"], progress: 0.6, status: "active" },
-];
-
-const mockChats: ChatItem[] = [
-  { title: "Meta-Chat (Roadmap Brain)", status: "active", progress: 0.55, meta: true, note: "Aggregating child statuses" },
-  { title: "Implement FS API", status: "waiting", progress: 0.35, note: "Blocked on auth middleware" },
-  { title: "UI Shell", status: "active", progress: 0.7, note: "Tabs wired, mock data flowing" },
-  { title: "Template JSON Validator", status: "inactive", progress: 0.15, note: "Need schema + tests" },
-];
+const demoSeed = {
+  project: {
+    name: "Nexus",
+    category: "Product",
+    status: "active",
+    description: "Multi-agent cockpit",
+  },
+  roadmap: {
+    title: "MVP Core",
+    tags: ["api", "db"],
+    progress: 0.42,
+    status: "in_progress" as Status,
+  },
+  chat: {
+    title: "Implement FS API",
+    goal: "Expose safe FS endpoints",
+    status: "in_progress" as Status,
+    progress: 0.35,
+  },
+};
 
 const statusColor: Record<Status, string> = {
   inactive: "#9CA3AF",
@@ -134,9 +153,9 @@ function summarizeAuditMeta(meta?: Record<string, unknown> | null) {
 }
 
 export default function Page() {
-  const [projects, setProjects] = useState<ProjectItem[]>(mockProjects);
-  const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>(mockRoadmaps);
-  const [chats, setChats] = useState<ChatItem[]>(mockChats);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>([]);
+  const [chats, setChats] = useState<ChatItem[]>([]);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
@@ -148,6 +167,7 @@ export default function Page() {
   const [keyfileToken, setKeyfileToken] = useState(DEMO_KEYFILE ?? "");
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -175,7 +195,12 @@ export default function Page() {
   const [fsTargetSha, setFsTargetSha] = useState<string>("HEAD");
   const [fsToast, setFsToast] = useState<ToastMessage | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [auditFilters, setAuditFilters] = useState<{ eventType: string; userId: string; pathContains: string; ipAddress: string }>({
+  const [auditFilters, setAuditFilters] = useState<{
+    eventType: string;
+    userId: string;
+    pathContains: string;
+    ipAddress: string;
+  }>({
     eventType: "",
     userId: "",
     pathContains: "",
@@ -229,13 +254,13 @@ export default function Page() {
     }
   }, []);
 
-  const fallbackToMockData = useCallback((reason: string) => {
-    setStatusMessage(reason);
+  const clearWorkspaceState = useCallback((reason?: string) => {
+    if (reason) setStatusMessage(reason);
     setSessionToken(null);
     setActiveUser(null);
-    setProjects(mockProjects);
-    setRoadmaps(mockRoadmaps);
-    setChats(mockChats);
+    setProjects([]);
+    setRoadmaps([]);
+    setChats([]);
     setSelectedProjectId(null);
     setSelectedRoadmapId(null);
     if (typeof window !== "undefined") {
@@ -302,10 +327,11 @@ export default function Page() {
           })),
         ].filter(Boolean) as ChatItem[];
         setChats(mappedChats);
+        setStatusMessage(mappedChats.length ? null : "No chats for this roadmap yet.");
       } catch (err) {
-        setStatusMessage("Using mock chats (backend unreachable)");
+        setStatusMessage("Failed to load chats.");
         setError(err instanceof Error ? err.message : "Failed to load chats");
-        setChats(mockChats);
+        setChats([]);
       }
     },
     [ensureStatus]
@@ -335,7 +361,10 @@ export default function Page() {
           })
         );
         const statusMap = Object.fromEntries(
-          statusPairs.filter(([, value]) => value !== null) as [string, { status: Status; progress: number; summary?: string }][]
+          statusPairs.filter(([, value]) => value !== null) as [
+            string,
+            { status: Status; progress: number; summary?: string },
+          ][]
         );
         setRoadmapStatus((prev) => ({ ...prev, ...statusMap }));
         const mappedRoadmaps = roadmapData.map((r) => ({
@@ -348,13 +377,15 @@ export default function Page() {
           summary: statusMap[r.id]?.summary,
         }));
         setRoadmaps(mappedRoadmaps);
+        setStatusMessage(roadmapData.length ? null : "No roadmaps for this project yet.");
         const preferredRoadmapId =
           storedRoadmapId && roadmapData.some((r) => r.id === storedRoadmapId)
             ? storedRoadmapId
             : roadmapData[0]?.id;
         if (preferredRoadmapId) {
           setSelectedRoadmapId(preferredRoadmapId);
-          if (typeof window !== "undefined") localStorage.setItem(ROADMAP_STORAGE_KEY, preferredRoadmapId);
+          if (typeof window !== "undefined")
+            localStorage.setItem(ROADMAP_STORAGE_KEY, preferredRoadmapId);
           await loadChatsForRoadmap(preferredRoadmapId, token, statusMap[preferredRoadmapId]);
         } else {
           setChats([]);
@@ -362,9 +393,9 @@ export default function Page() {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load roadmaps");
-        setStatusMessage("Failed to load roadmaps; showing mock data.");
-        setRoadmaps(mockRoadmaps);
-        setChats(mockChats);
+        setStatusMessage("Failed to load roadmaps.");
+        setRoadmaps([]);
+        setChats([]);
         setSelectedRoadmapId(null);
       }
     },
@@ -387,26 +418,31 @@ export default function Page() {
           info: p.description ?? "",
         }));
         setProjects(mappedProjects);
+        setStatusMessage(
+          projectData.length ? null : "No projects found. Seed demo data to get started."
+        );
         const preferredProjectId =
           storedProjectId && projectData.some((p) => p.id === storedProjectId)
             ? storedProjectId
             : projectData[0]?.id;
         if (preferredProjectId) {
           setSelectedProjectId(preferredProjectId);
-          if (typeof window !== "undefined") localStorage.setItem(PROJECT_STORAGE_KEY, preferredProjectId);
+          if (typeof window !== "undefined")
+            localStorage.setItem(PROJECT_STORAGE_KEY, preferredProjectId);
           await loadRoadmapsForProject(preferredProjectId, token);
         } else {
           setRoadmaps([]);
           setChats([]);
           setSelectedProjectId(null);
           setSelectedRoadmapId(null);
+          setStatusMessage("No projects found. Seed demo data to get started.");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load projects");
-        fallbackToMockData("Backend unreachable; showing mock data.");
+        clearWorkspaceState("Backend unreachable. Please try again.");
       }
     },
-    [fallbackToMockData, loadRoadmapsForProject]
+    [clearWorkspaceState, loadRoadmapsForProject]
   );
 
   useEffect(() => {
@@ -420,7 +456,7 @@ export default function Page() {
         await hydrateWorkspace(token, DEMO_USERNAME);
       } catch (err) {
         if (!cancelled) {
-          fallbackToMockData("Using mock data (backend unreachable)");
+          clearWorkspaceState("Backend unreachable.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -430,7 +466,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [fallbackToMockData, hydrateWorkspace]);
+  }, [clearWorkspaceState, hydrateWorkspace]);
 
   const handleSelectRoadmap = async (roadmapId: string) => {
     setSelectedRoadmapId(roadmapId);
@@ -465,13 +501,40 @@ export default function Page() {
       const { token } = await login(username, password, keyfileToken || undefined);
       await hydrateWorkspace(token, username);
     } catch (err) {
-      setError("Login failed; using mock data");
+      setError("Login failed.");
       setLoginError(err instanceof Error ? err.message : "Login failed");
-      fallbackToMockData("Login failed; showing mock data.");
+      clearWorkspaceState("Login failed.");
     } finally {
       setLoading(false);
     }
   };
+
+  const seedDemoData = useCallback(async () => {
+    if (!sessionToken) {
+      setStatusMessage("Login to seed demo data.");
+      return;
+    }
+    if (projects.length > 0) {
+      setStatusMessage("Projects already exist; skipping demo seed.");
+      return;
+    }
+    setSeeding(true);
+    setStatusMessage(null);
+    setError(null);
+    try {
+      const { id: projectId } = await createProject(sessionToken, demoSeed.project);
+      const { id: roadmapId } = await createRoadmap(sessionToken, projectId, demoSeed.roadmap);
+      await createChat(sessionToken, roadmapId, demoSeed.chat);
+      setStatusMessage("Demo data created.");
+      await hydrateWorkspace(sessionToken, activeUser ?? username ?? DEMO_USERNAME);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to seed demo data";
+      setError(message);
+      setStatusMessage("Failed to seed demo data.");
+    } finally {
+      setSeeding(false);
+    }
+  }, [activeUser, hydrateWorkspace, projects.length, sessionToken, username]);
 
   const connectTerminalStream = (sessionId: string, token: string) => {
     if (!sessionId || !token) return;
@@ -522,7 +585,9 @@ export default function Page() {
         setStatusMessage("Terminal auth failed. Try logging in again.");
         setTerminalSessionId(null);
       }
-      setTerminalOutput((prev) => `${prev}\n[stream closed (${event.code}${reason ? `: ${reason}` : ""})]\n`);
+      setTerminalOutput(
+        (prev) => `${prev}\n[stream closed (${event.code}${reason ? `: ${reason}` : ""})]\n`
+      );
       const idleClosed = reason === "idle timeout" || event.code === 4000;
       if (idleClosed) {
         setTerminalStatus((prev) => prev ?? "Closed after idle timeout");
@@ -546,7 +611,10 @@ export default function Page() {
     setTerminalStatus("Starting terminal session…");
     setTerminalOutput("Starting terminal session…\n");
     try {
-      const { sessionId } = await createTerminalSession(sessionToken, selectedProjectId ?? undefined);
+      const { sessionId } = await createTerminalSession(
+        sessionToken,
+        selectedProjectId ?? undefined
+      );
       setTerminalSessionId(sessionId);
       connectTerminalStream(sessionId, sessionToken);
     } catch (err) {
@@ -568,7 +636,9 @@ export default function Page() {
       try {
         await sendTerminalInput(sessionToken, terminalSessionId, payload);
       } catch (err) {
-        setTerminalOutput((prev) => `${prev}\n[input failed: ${err instanceof Error ? err.message : "unknown"}]\n`);
+        setTerminalOutput(
+          (prev) => `${prev}\n[input failed: ${err instanceof Error ? err.message : "unknown"}]\n`
+        );
       }
     }
     setTerminalInput("");
@@ -600,7 +670,11 @@ export default function Page() {
         const message = err instanceof Error ? err.message : "Failed to load tree";
         setFsError(message);
         setFsEntries([]);
-        setFsToast({ message: "File list failed", detail: `${targetPath}: ${message}`, tone: "error" });
+        setFsToast({
+          message: "File list failed",
+          detail: `${targetPath}: ${message}`,
+          tone: "error",
+        });
       } finally {
         setFsLoading(false);
       }
@@ -685,7 +759,11 @@ export default function Page() {
       setFsDiffError(message);
       setFsDiff("");
       setFsDiffLoaded(false);
-      setFsToast({ message: "Diff load failed", detail: `${fsContentPath}: ${message}`, tone: "error" });
+      setFsToast({
+        message: "Diff load failed",
+        detail: `${fsContentPath}: ${message}`,
+        tone: "error",
+      });
     } finally {
       setFsDiffLoading(false);
     }
@@ -765,12 +843,13 @@ export default function Page() {
       options?: { reset?: boolean; filtersOverride?: Partial<typeof auditFilters> }
     ) => {
       if (!sessionToken) return;
-      const cursor = options?.reset ? undefined : auditCursorRef.current ?? undefined;
+      const cursor = options?.reset ? undefined : (auditCursorRef.current ?? undefined);
       const baseFilters = auditFiltersRef.current;
       const filters = {
         eventType: (options?.filtersOverride?.eventType ?? baseFilters.eventType) || undefined,
         userId: (options?.filtersOverride?.userId ?? baseFilters.userId) || undefined,
-        pathContains: (options?.filtersOverride?.pathContains ?? baseFilters.pathContains) || undefined,
+        pathContains:
+          (options?.filtersOverride?.pathContains ?? baseFilters.pathContains) || undefined,
         ipAddress: (options?.filtersOverride?.ipAddress ?? baseFilters.ipAddress) || undefined,
       };
       if (options?.reset) {
@@ -834,10 +913,22 @@ export default function Page() {
                 ? `Session ${terminalSessionId}`
                 : "Start a session to stream output."}
             </div>
-            {terminalStatus && <div className="item-subtle" style={{ marginBottom: 8 }}>{terminalStatus}</div>}
+            {terminalStatus && (
+              <div className="item-subtle" style={{ marginBottom: 8 }}>
+                {terminalStatus}
+              </div>
+            )}
             <div className="login-row" style={{ gap: 8, alignItems: "center" }}>
-              <button className="tab" onClick={startTerminalSession} disabled={terminalConnecting || !sessionToken}>
-                {terminalConnecting ? "Connecting…" : terminalSessionId ? "Restart Session" : "Start Session"}
+              <button
+                className="tab"
+                onClick={startTerminalSession}
+                disabled={terminalConnecting || !sessionToken}
+              >
+                {terminalConnecting
+                  ? "Connecting…"
+                  : terminalSessionId
+                    ? "Restart Session"
+                    : "Start Session"}
               </button>
               <input
                 className="filter"
@@ -850,7 +941,11 @@ export default function Page() {
                 disabled={!terminalSessionId}
                 style={{ flex: 1 }}
               />
-              <button className="tab" onClick={handleSendTerminalInput} disabled={!terminalSessionId || !terminalInput}>
+              <button
+                className="tab"
+                onClick={handleSendTerminalInput}
+                disabled={!terminalSessionId || !terminalInput}
+              >
                 Send
               </button>
             </div>
@@ -881,7 +976,11 @@ export default function Page() {
                 Open
               </button>
             </div>
-            {fsError && <div className="item-subtle" style={{ color: "#EF4444" }}>{fsError}</div>}
+            {fsError && (
+              <div className="item-subtle" style={{ color: "#EF4444" }}>
+                {fsError}
+              </div>
+            )}
             {fsLoading && <div className="item-subtle">Loading files…</div>}
             <div className="panel-text" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {fsEntries.map((entry) => (
@@ -949,7 +1048,11 @@ export default function Page() {
                     onChange={(e) => setFsTargetSha(e.target.value)}
                     style={{ minWidth: 140 }}
                   />
-                  <button className="tab" onClick={loadFsDiff} disabled={fsDiffLoading || fsLoading}>
+                  <button
+                    className="tab"
+                    onClick={loadFsDiff}
+                    disabled={fsDiffLoading || fsLoading}
+                  >
                     {fsDiffLoading ? "Loading…" : "View Diff"}
                   </button>
                   <button
@@ -964,9 +1067,16 @@ export default function Page() {
                     Clear
                   </button>
                 </div>
-                {fsDiffError && <div className="item-subtle" style={{ color: "#EF4444" }}>{fsDiffError}</div>}
+                {fsDiffError && (
+                  <div className="item-subtle" style={{ color: "#EF4444" }}>
+                    {fsDiffError}
+                  </div>
+                )}
                 {(fsDiffLoaded || fsDiff) && (
-                  <div className="panel-mono" style={{ maxHeight: 320, overflow: "auto", whiteSpace: "pre" }}>
+                  <div
+                    className="panel-mono"
+                    style={{ maxHeight: 320, overflow: "auto", whiteSpace: "pre" }}
+                  >
                     <div className="item-subtle" style={{ marginBottom: 6 }}>
                       Diff for {fsContentPath}{" "}
                       {fsBaseSha.trim() ? `from ${fsBaseSha.trim()}` : "(working tree)"}{" "}
@@ -983,8 +1093,12 @@ export default function Page() {
         return (
           <div className="panel-card">
             <div className="panel-title">Chat</div>
-            <div className="panel-text">JSON-before-stop summaries, template metadata, and message stream go here.</div>
-            <div className="panel-mono">{"{ status: \"in_progress\", progress: 0.42, focus: \"Implement FS API\" }"}</div>
+            <div className="panel-text">
+              JSON-before-stop summaries, template metadata, and message stream go here.
+            </div>
+            <div className="panel-mono">
+              {'{ status: "in_progress", progress: 0.42, focus: "Implement FS API" }'}
+            </div>
           </div>
         );
     }
@@ -1019,23 +1133,44 @@ export default function Page() {
             {loading ? "Loading…" : "Login"}
           </button>
         </div>
-        {loginError && <div className="item-subtle" style={{ color: "#EF4444" }}>{loginError}</div>}
+        {loginError && (
+          <div className="item-subtle" style={{ color: "#EF4444" }}>
+            {loginError}
+          </div>
+        )}
         <div className="item-subtle">
           {activeUser && sessionToken
             ? `Active user: ${activeUser} (token ${sessionToken.slice(0, 6)}…)`
             : "Active user: none (mock data)"}
         </div>
-        {statusMessage && <div className="item-subtle" style={{ color: "#F59E0B" }}>{statusMessage}</div>}
+        {statusMessage && (
+          <div className="item-subtle" style={{ color: "#F59E0B" }}>
+            {statusMessage}
+          </div>
+        )}
       </div>
       <div className="columns">
         <div className="column">
           <header className="column-header">
             <span>Projects</span>
-            <input className="filter" placeholder="Filter" />
+            <button
+              className="ghost"
+              onClick={seedDemoData}
+              disabled={!sessionToken || seeding || loading}
+              title={sessionToken ? "" : "Login to create demo data"}
+            >
+              {seeding ? "Seeding…" : "Seed demo"}
+            </button>
           </header>
           {loading && <div className="item-subtle">Loading projects…</div>}
           {error && <div className="item-subtle">{error}</div>}
           <div className="list">
+            {!loading && projects.length === 0 && (
+              <div className="item-subtle">
+                No projects yet.{" "}
+                {sessionToken ? "Seed demo data to populate the lists." : "Login to load data."}
+              </div>
+            )}
             {projects.map((p) => (
               <div
                 className={`item ${selectedProjectId === p.id ? "active" : ""}`}
@@ -1059,6 +1194,9 @@ export default function Page() {
             <button className="ghost">+ New</button>
           </header>
           <div className="list">
+            {roadmaps.length === 0 && selectedProjectId && (
+              <div className="item-subtle">No roadmaps for this project yet.</div>
+            )}
             {roadmaps.map((r) => (
               <div
                 className={`item ${selectedRoadmapId === r.id ? "active" : ""}`}
@@ -1066,7 +1204,10 @@ export default function Page() {
                 onClick={() => r.id && handleSelectRoadmap(r.id)}
               >
                 <div className="item-line">
-                  <span className="status-dot" style={{ background: statusColor[r.status] ?? statusColor.active }} />
+                  <span
+                    className="status-dot"
+                    style={{ background: statusColor[r.status] ?? statusColor.active }}
+                  />
                   <span className="item-title">{r.title}</span>
                   <span className="item-subtle">{progressPercent(r.progress)}%</span>
                 </div>
@@ -1082,10 +1223,16 @@ export default function Page() {
             <button className="ghost">+ Chat</button>
           </header>
           <div className="list">
+            {chats.length === 0 && selectedRoadmapId && (
+              <div className="item-subtle">No chats for this roadmap yet.</div>
+            )}
             {chats.map((c) => (
               <div className={`item ${c.meta ? "meta" : ""}`} key={c.title}>
                 <div className="item-line">
-                  <span className="status-dot" style={{ background: statusColor[c.status] ?? statusColor.active }} />
+                  <span
+                    className="status-dot"
+                    style={{ background: statusColor[c.status] ?? statusColor.active }}
+                  />
                   <span className="item-title">{c.title}</span>
                   <span className="item-subtle">{progressPercent(c.progress)}%</span>
                 </div>
@@ -1210,7 +1357,11 @@ export default function Page() {
             {auditLoading ? "Loading…" : auditHasMore ? "Load more" : "No more events"}
           </button>
         </div>
-        {auditError && <div className="item-subtle" style={{ color: "#EF4444" }}>{auditError}</div>}
+        {auditError && (
+          <div className="item-subtle" style={{ color: "#EF4444" }}>
+            {auditError}
+          </div>
+        )}
         <div className="list" style={{ maxHeight: 260, overflow: "auto" }}>
           {auditEvents.length === 0 && <div className="item-subtle">No audit events yet.</div>}
           {auditEvents.map((event) => (
@@ -1225,13 +1376,14 @@ export default function Page() {
               {(() => {
                 const derivedIp =
                   event.ipAddress ??
-                  (event.metadata && typeof (event.metadata as Record<string, unknown>).ip === "string"
+                  (event.metadata &&
+                  typeof (event.metadata as Record<string, unknown>).ip === "string"
                     ? String((event.metadata as Record<string, unknown>).ip)
                     : null);
                 return (
                   <div className="item-subtle">
-                    user {event.userId ?? "—"} · session {event.sessionId ?? "—"} · project {event.projectId ?? "—"} · ip{" "}
-                    {derivedIp ?? "—"}
+                    user {event.userId ?? "—"} · session {event.sessionId ?? "—"} · project{" "}
+                    {event.projectId ?? "—"} · ip {derivedIp ?? "—"}
                   </div>
                 );
               })()}

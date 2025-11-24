@@ -99,7 +99,17 @@ export async function fetchRoadmapStatus(
 export async function fetchChats(
   token: string,
   roadmapId: string
-): Promise<{ id: string; title: string; status: string; progress: number; goal?: string }[]> {
+): Promise<
+  {
+    id: string;
+    title: string;
+    status: string;
+    progress: number;
+    goal?: string;
+    templateId?: string;
+    metadata?: Record<string, unknown> | null;
+  }[]
+> {
   return fetchWithAuth(token, `/api/roadmaps/${roadmapId}/chats`);
 }
 
@@ -309,4 +319,31 @@ export async function fetchAuditEvents(
   if (filters?.ipAddress) params.set("ipAddress", filters.ipAddress);
   if (sort) params.set("sort", sort);
   return fetchWithAuth(token, `/api/audit/events?${params.toString()}`);
+}
+
+export async function fetchTemplates(
+  token: string
+): Promise<
+  {
+    id: string;
+    title: string;
+    goal?: string;
+    jsonRequired?: boolean;
+    metadata?: Record<string, unknown> | null;
+  }[]
+> {
+  return fetchWithAuth(token, "/api/templates");
+}
+
+export async function fetchMetaChat(
+  token: string,
+  roadmapId: string
+): Promise<{
+  id: string;
+  roadmapListId: string;
+  status: string;
+  progress: number;
+  summary?: string;
+}> {
+  return fetchWithAuth(token, `/api/roadmaps/${roadmapId}/meta-chat`);
 }

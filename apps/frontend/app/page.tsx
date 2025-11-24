@@ -21,6 +21,8 @@ import {
   sendTerminalInput,
   postChatMessage,
   updateChatStatus,
+  fetchTemplates,
+  fetchMetaChat,
 } from "../lib/api";
 
 type Status =
@@ -56,6 +58,9 @@ type ChatItem = {
   progress: number;
   note?: string;
   meta?: boolean;
+  goal?: string;
+  focus?: string;
+  templateId?: string;
 };
 type MessageItem = {
   id: string;
@@ -76,6 +81,20 @@ type AuditEvent = {
   metadata?: Record<string, unknown> | null;
 };
 type ToastMessage = { message: string; detail?: string; tone: "success" | "error" };
+type TemplateItem = {
+  id: string;
+  title: string;
+  goal?: string;
+  jsonRequired?: boolean;
+  metadata?: Record<string, unknown> | null;
+};
+type MetaChat = {
+  id: string;
+  roadmapListId: string;
+  status: Status;
+  progress: number;
+  summary?: string;
+};
 const demoSeed = {
   project: {
     name: "Nexus",
@@ -167,6 +186,7 @@ export default function Page() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
@@ -174,6 +194,7 @@ export default function Page() {
   const [roadmapStatus, setRoadmapStatus] = useState<
     Record<string, { status: Status; progress: number; summary?: string }>
   >({});
+  const [metaChats, setMetaChats] = useState<Record<string, MetaChat>>({});
   const [username, setUsername] = useState(DEMO_USERNAME);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [keyfileToken, setKeyfileToken] = useState(DEMO_KEYFILE ?? "");
@@ -211,6 +232,9 @@ export default function Page() {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageFilter, setMessageFilter] = useState<
+    "all" | "user" | "assistant" | "system" | "status" | "meta"
+  >("all");
   const [chatStatusDraft, setChatStatusDraft] = useState<Status>("in_progress");
   const [chatProgressDraft, setChatProgressDraft] = useState<string>("0");
   const [chatFocusDraft, setChatFocusDraft] = useState("");
@@ -295,12 +319,44 @@ export default function Page() {
     const existing = roadmapStatusRef.current[roadmapId];
     if (existing) return existing;
     try {
-      const remote = await fetchRoadmapStatus(token, roadmapId);
+      const meta = await fetchMetaChat(token, roadmapId);
       const mapped = {
-        status: (remote.status as Status) ?? "active",
-        progress: remote.progress ?? 0,
-        summary: remote.summary,
+        status: (meta.status as Status) ?? "active",
+        progress: meta.progress ?? 0,
+        summary: meta.summary,
       };
+      setMetaChats((prev) => ({ ...prev, [roadmapId]: { ...meta, ...mapped } }));
+      roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
+      setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
+      return mapped;
+    } catch {
+      try {
+        const remote = await fetchRoadmapStatus(token, roadmapId);
+        const mapped = {
+          status: (remote.status as Status) ?? "active",
+          progress: remote.progress ?? 0,
+          summary: remote.summary,
+        };
+        roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
+        setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
+        return mapped;
+      } catch {
+        return null;
+      }
+    }
+  }, []);
+
+  const loadMetaChat = useCallback(async (roadmapId: string, token: string) => {
+    try {
+      const meta = await fetchMetaChat(token, roadmapId);
+      const mapped = {
+        id: meta.id,
+        roadmapListId: meta.roadmapListId,
+        status: (meta.status as Status) ?? "active",
+        progress: meta.progress ?? 0,
+        summary: meta.summary,
+      };
+      setMetaChats((prev) => ({ ...prev, [roadmapId]: mapped }));
       roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
       setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
       return mapped;
@@ -339,7 +395,11 @@ export default function Page() {
     setActiveUser(null);
     setProjects([]);
     setRoadmaps([]);
+    setRoadmapStatus({});
+    roadmapStatusRef.current = {};
     setChats([]);
+    setMetaChats({});
+    setTemplates([]);
     setSelectedProjectId(null);
     setSelectedRoadmapId(null);
     setSelectedChatId(null);
@@ -400,25 +460,38 @@ export default function Page() {
     ) => {
       try {
         const status = statusHint ?? (await ensureStatus(roadmapId, token));
+        const cachedMeta = metaChats[roadmapId];
+        const meta = cachedMeta ?? (await loadMetaChat(roadmapId, token));
         const chatData = await fetchChats(token, roadmapId);
+        const metaSummary = meta?.summary ?? status?.summary;
+        const metaStatus = meta ?? (status ? { roadmapListId: roadmapId, ...status } : null);
         const mappedChats: ChatItem[] = [
-          status
+          metaStatus
             ? {
                 id: `meta-${roadmapId}`,
                 title: "Meta-Chat",
-                status: status.status,
-                progress: status.progress,
-                note: status.summary ?? "Aggregated from child chats",
+                status: metaStatus.status,
+                progress: metaStatus.progress,
+                note: metaSummary ?? "Aggregated from child chats",
                 meta: true,
               }
             : null,
-          ...chatData.map((c) => ({
-            id: c.id,
-            title: c.title,
-            status: (c.status as Status) ?? "active",
-            progress: c.progress ?? 0,
-            note: c.goal,
-          })),
+          ...chatData.map((c) => {
+            const focus =
+              c.metadata && typeof (c.metadata as Record<string, unknown>).focus === "string"
+                ? (c.metadata as Record<string, unknown>).focus
+                : null;
+            return {
+              id: c.id,
+              title: c.title,
+              status: (c.status as Status) ?? "active",
+              progress: c.progress ?? 0,
+              note: focus ?? c.goal,
+              focus: focus ?? undefined,
+              goal: c.goal,
+              templateId: c.templateId,
+            };
+          }),
         ].filter(Boolean) as ChatItem[];
         setChats(mappedChats);
         const storedChatId = readStoredChat(roadmapId);
@@ -440,7 +513,14 @@ export default function Page() {
         setChats([]);
       }
     },
-    [ensureStatus, loadMessagesForChat, persistChatSelection, readStoredChat]
+    [
+      ensureStatus,
+      loadMetaChat,
+      loadMessagesForChat,
+      metaChats,
+      persistChatSelection,
+      readStoredChat,
+    ]
   );
 
   const loadRoadmapsForProject = useCallback(
@@ -521,6 +601,12 @@ export default function Page() {
       try {
         setSessionToken(token);
         setActiveUser(activeUsername);
+        try {
+          const templateData = await fetchTemplates(token);
+          setTemplates(templateData as TemplateItem[]);
+        } catch {
+          setTemplates([]);
+        }
         const projectData = await fetchProjects(token);
         const storedProjectId =
           typeof window !== "undefined" ? localStorage.getItem(PROJECT_STORAGE_KEY) : null;
@@ -830,50 +916,83 @@ export default function Page() {
     }
   }, [loadMessagesForChat, messageDraft, selectedChatId, sessionToken]);
 
-  const handleUpdateChatStatus = useCallback(async () => {
+  const handleUpdateChatStatus = useCallback(
+    async (override?: { status?: Status; progressPercent?: number; focus?: string }) => {
+      if (!sessionToken || !selectedChatId) {
+        setChatUpdateMessage("Select a chat first.");
+        return;
+      }
+      if (selectedChatId.startsWith("meta-")) {
+        setChatUpdateMessage("Meta-chat status comes from child chats.");
+        return;
+      }
+      const rawProgress = override?.progressPercent ?? chatProgressDraft;
+      const parsedProgress = Math.max(
+        0,
+        Math.min(100, Number.isFinite(Number(rawProgress)) ? Number(rawProgress) : 0)
+      );
+      const focusValue = (override?.focus ?? chatFocusDraft).trim();
+      const statusValue = override?.status ?? chatStatusDraft;
+      try {
+        const updated = await updateChatStatus(sessionToken, selectedChatId, {
+          status: statusValue,
+          progress: parsedProgress / 100,
+          focus: focusValue || undefined,
+        });
+        setChatUpdateMessage("Status updated.");
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === updated.id
+              ? {
+                  ...chat,
+                  status: (updated.status as Status) ?? chat.status,
+                  progress: updated.progress ?? chat.progress,
+                  note: focusValue || chat.note,
+                  focus: focusValue || chat.focus,
+                }
+              : chat
+          )
+        );
+        await loadMessagesForChat(selectedChatId, sessionToken);
+        if (selectedRoadmapId && sessionToken) {
+          await loadMetaChat(selectedRoadmapId, sessionToken);
+        }
+      } catch (err) {
+        setChatUpdateMessage(err instanceof Error ? err.message : "Failed to update status");
+      }
+    },
+    [
+      chatFocusDraft,
+      chatProgressDraft,
+      chatStatusDraft,
+      loadMessagesForChat,
+      loadMetaChat,
+      selectedChatId,
+      selectedRoadmapId,
+      sessionToken,
+    ]
+  );
+
+  const handleRequestStatusMessage = useCallback(async () => {
     if (!sessionToken || !selectedChatId) {
       setChatUpdateMessage("Select a chat first.");
       return;
     }
     if (selectedChatId.startsWith("meta-")) {
-      setChatUpdateMessage("Meta-chat status comes from child chats.");
+      setChatUpdateMessage("Meta-chat status is aggregated.");
       return;
     }
-    const parsedProgress = Math.max(
-      0,
-      Math.min(100, Number.isFinite(Number(chatProgressDraft)) ? Number(chatProgressDraft) : 0)
-    );
     try {
-      const updated = await updateChatStatus(sessionToken, selectedChatId, {
-        status: chatStatusDraft,
-        progress: parsedProgress / 100,
-        focus: chatFocusDraft.trim() || undefined,
+      await postChatMessage(sessionToken, selectedChatId, {
+        role: "status",
+        content: "Status requested by user",
       });
-      setChatUpdateMessage("Status updated.");
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === updated.id
-            ? {
-                ...chat,
-                status: (updated.status as Status) ?? chat.status,
-                progress: updated.progress ?? chat.progress,
-                note: chatFocusDraft.trim() || chat.note,
-              }
-            : chat
-        )
-      );
       await loadMessagesForChat(selectedChatId, sessionToken);
+      setChatUpdateMessage("Status request sent.");
     } catch (err) {
-      setChatUpdateMessage(err instanceof Error ? err.message : "Failed to update status");
+      setChatUpdateMessage(err instanceof Error ? err.message : "Failed to request status");
     }
-  }, [
-    chatFocusDraft,
-    chatProgressDraft,
-    chatStatusDraft,
-    loadMessagesForChat,
-    selectedChatId,
-    sessionToken,
-  ]);
+  }, [loadMessagesForChat, selectedChatId, sessionToken]);
 
   const connectTerminalStream = (sessionId: string, token: string) => {
     if (!sessionId || !token) return;
@@ -1182,14 +1301,16 @@ export default function Page() {
       setChatProgressDraft("0");
       setChatFocusDraft("");
       setChatUpdateMessage(null);
+      setMessageFilter("all");
       return;
     }
     const chat = chats.find((c) => c.id === selectedChatId);
     if (chat) {
       setChatStatusDraft(chat.status);
       setChatProgressDraft(String(progressPercent(chat.progress)));
-      setChatFocusDraft(chat.note ?? "");
+      setChatFocusDraft(chat.focus ?? chat.note ?? "");
       setChatUpdateMessage(null);
+      setMessageFilter("all");
     }
   }, [chats, selectedChatId]);
 
@@ -1260,6 +1381,17 @@ export default function Page() {
 
   const selectedChat = chats.find((c) => c.id === selectedChatId);
   const isMetaChatSelected = selectedChat?.meta;
+  const templateForChat = selectedChat?.templateId
+    ? templates.find((t) => t.id === selectedChat.templateId)
+    : null;
+  const roadmapMeta = selectedRoadmapId ? metaChats[selectedRoadmapId] : null;
+  const roadmapSummary = selectedRoadmapId ? roadmapStatus[selectedRoadmapId] : null;
+  const siblingTasks = chats.filter((chat) => !chat.meta && chat.id && chat.id !== selectedChatId);
+  const lastStatusMessage = [...messages].reverse().find((msg) => msg.role === "status");
+  const visibleMessages =
+    messageFilter === "all"
+      ? messages
+      : messages.filter((message) => message.role === messageFilter);
 
   const tabBody = (() => {
     switch (activeTab) {
@@ -1501,8 +1633,78 @@ export default function Page() {
               >
                 {messagesLoading ? "Refreshing…" : "Refresh"}
               </button>
+              <button
+                className="ghost"
+                onClick={() =>
+                  handleUpdateChatStatus({
+                    status: "done",
+                    progressPercent: 100,
+                    focus:
+                      chatFocusDraft.trim() ||
+                      selectedChat.focus ||
+                      selectedChat.goal ||
+                      "Completed",
+                  })
+                }
+                disabled={!sessionToken || messagesLoading}
+              >
+                Mark done
+              </button>
+              <button
+                className="ghost"
+                onClick={() => {
+                  const metaId = selectedRoadmapId ? `meta-${selectedRoadmapId}` : null;
+                  if (!metaId) return;
+                  const meta = chats.find((chat) => chat.id === metaId);
+                  if (meta) handleSelectChat(meta);
+                }}
+                disabled={!selectedRoadmapId}
+              >
+                Open meta-chat
+              </button>
             </div>
-            <div className="panel-text">{selectedChat.note || "No goal/summary yet."}</div>
+            <div className="item-line" style={{ gap: 8, flexWrap: "wrap" }}>
+              {templateForChat ? (
+                <span className="item-pill" title={templateForChat.goal ?? ""}>
+                  Template: {templateForChat.title}
+                  {templateForChat.jsonRequired ? " · requires JSON" : ""}
+                </span>
+              ) : (
+                <span className="item-subtle">Template: none linked</span>
+              )}
+              <span className="item-pill" title={selectedChat.goal ?? ""}>
+                Goal: {selectedChat.goal ?? "—"}
+              </span>
+              {roadmapSummary && (
+                <span className="item-pill" title={roadmapSummary.summary ?? ""}>
+                  Roadmap: {progressPercent(roadmapSummary.progress)}% · {roadmapSummary.status}
+                </span>
+              )}
+            </div>
+            <div className="panel-text">
+              Focus:{" "}
+              {selectedChat.focus || selectedChat.note || selectedChat.goal || "No focus yet."}
+            </div>
+            <div className="item-subtle" style={{ marginBottom: 6 }}>
+              {lastStatusMessage
+                ? `Latest status ping: ${lastStatusMessage.content}`
+                : "No status messages yet."}
+            </div>
+            <div className="item-subtle" style={{ marginBottom: 8 }}>
+              Roadmap summary:{" "}
+              {roadmapMeta?.summary ??
+                roadmapSummary?.summary ??
+                "Status will sync from meta-chat once available."}
+            </div>
+            <div className="item-subtle" style={{ marginBottom: 10 }}>
+              Roadmap tasks:{" "}
+              {siblingTasks.length
+                ? siblingTasks
+                    .slice(0, 3)
+                    .map((chat) => `${chat.title} (${progressPercent(chat.progress)}%)`)
+                    .join(" · ")
+                : "No sibling tasks."}
+            </div>
             <div className="login-row" style={{ gap: 8, flexWrap: "wrap" }}>
               <select
                 className="filter"
@@ -1533,6 +1735,13 @@ export default function Page() {
               <button className="tab" onClick={handleUpdateChatStatus} disabled={messagesLoading}>
                 Update status
               </button>
+              <button
+                className="ghost"
+                onClick={handleRequestStatusMessage}
+                disabled={messagesLoading}
+              >
+                Request status
+              </button>
               {chatUpdateMessage && (
                 <span className="item-subtle" style={{ color: "#94a3b8" }}>
                   {chatUpdateMessage}
@@ -1544,12 +1753,33 @@ export default function Page() {
                 {messagesError}
               </div>
             )}
+            <div className="login-row" style={{ gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <span className="item-subtle">Messages:</span>
+              <select
+                className="filter"
+                value={messageFilter}
+                onChange={(e) => setMessageFilter(e.target.value as typeof messageFilter)}
+                style={{ minWidth: 160 }}
+              >
+                {["all", "user", "assistant", "system", "status", "meta"].map((value) => (
+                  <option key={value} value={value}>
+                    {value === "all" ? "all roles" : value}
+                  </option>
+                ))}
+              </select>
+              <span className="item-subtle">
+                Showing {visibleMessages.length}/{messages.length} messages
+              </span>
+            </div>
             <div className="chat-stream">
               {messagesLoading && <div className="item-subtle">Loading messages…</div>}
               {!messagesLoading && messages.length === 0 && (
                 <div className="item-subtle">No messages yet.</div>
               )}
-              {messages.map((message) => (
+              {!messagesLoading && messages.length > 0 && visibleMessages.length === 0 && (
+                <div className="item-subtle">No messages match this filter.</div>
+              )}
+              {visibleMessages.map((message) => (
                 <div className="chat-row" key={message.id}>
                   <span
                     className="chat-role"

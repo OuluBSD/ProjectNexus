@@ -4,6 +4,7 @@ import { afterEach, test } from "node:test";
 import { authRoutes, loginThrottleState } from "../routes/auth";
 import * as authRepo from "../services/authRepository";
 import * as schema from "@nexus/shared/db/schema";
+import { validateToken } from "../utils/auth";
 import { mock } from "node:test";
 
 afterEach(() => {
@@ -54,6 +55,37 @@ test("purgeExpiredSessions issues a delete against session table", async () => {
   assert.ok(calls[0].condition);
 });
 
+test("getSessionWithUser prunes expired database sessions", async () => {
+  const expired = new Date(Date.now() - 1000);
+  let deletedToken: string | null = null;
+
+  const fakeDb = {
+    select: () => ({
+      from: () => ({
+        leftJoin: () => ({
+          where: async () => [
+            {
+              session: { token: "expired", userId: "user-1", expiresAt: expired },
+              user: { id: "user-1", username: "expired-user" },
+            },
+          ],
+        }),
+      }),
+    }),
+    delete: () => ({
+      where: () => {
+        deletedToken = "expired";
+        return Promise.resolve();
+      },
+    }),
+  };
+
+  const session = await authRepo.getSessionWithUser(fakeDb as any, "expired");
+
+  assert.equal(session, null);
+  assert.equal(deletedToken, "expired");
+});
+
 test("successful login clears throttle attempts for the user/ip pair", async () => {
   const app = Fastify({ logger: false });
   await app.register(authRoutes, { prefix: "/auth" });
@@ -77,6 +109,39 @@ test("successful login clears throttle attempts for the user/ip pair", async () 
     loginThrottleState.attempts.clear();
     await app.close();
   }
+});
+
+test("validateToken purges expired sessions before resolving", async () => {
+  const future = new Date(Date.now() + 60_000);
+  let purged = false;
+  const fakeDb = {
+    delete: () => ({
+      where: () => {
+        purged = true;
+        return Promise.resolve();
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        leftJoin: () => ({
+          where: async () => [
+            {
+              session: { token: "db-token", userId: "db-user", expiresAt: future },
+              user: { id: "db-user", username: "db-user" },
+            },
+          ],
+        }),
+      }),
+    }),
+  };
+
+  const fastifyLike = { db: fakeDb as any, log: { error: () => {} } } as any;
+  const session = await validateToken(fastifyLike, "db-token");
+
+  assert.ok(purged, "purgeExpiredSessions should run before lookup");
+  assert.equal(session?.token, "db-token");
+  assert.equal(session?.userId, "db-user");
+  assert.equal(session?.username, "db-user");
 });
 
 test("throttle unblocks after block window elapses", async () => {

@@ -1,13 +1,15 @@
 import type { FastifyPluginAsync } from "fastify";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { recordAuditEvent } from "../services/auditLogger";
 import { requireSession } from "../utils/auth";
 import { getProjectRoot, resolveWorkspacePath } from "../utils/workspace";
 import { findProject } from "../utils/projects";
 
 export const fileRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/fs/tree", async (request, reply) => {
-    if (!(await requireSession(request, reply))) return;
+    const session = await requireSession(request, reply);
+    if (!session) return;
     const query = request.query as { projectId?: string; path?: string };
     if (!query.projectId) {
       reply.code(400).send({ error: { code: "missing_project", message: "projectId is required" } });
@@ -40,6 +42,12 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
           type: entry.isDirectory() ? "dir" : "file",
           name: entry.name,
         }));
+      await recordAuditEvent(fastify, {
+        userId: session.userId,
+        projectId: query.projectId,
+        eventType: "fs:tree",
+        path: inputPath,
+      });
       reply.send({ path: inputPath, entries: payload });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
@@ -52,7 +60,8 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/fs/file", async (request, reply) => {
-    if (!(await requireSession(request, reply))) return;
+    const session = await requireSession(request, reply);
+    if (!session) return;
     const query = request.query as { projectId?: string; path?: string };
     if (!query.projectId || !query.path) {
       reply.code(400).send({ error: { code: "missing_params", message: "projectId and path are required" } });
@@ -73,6 +82,12 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const content = await fs.readFile(safePath.absolutePath, "utf8");
+      await recordAuditEvent(fastify, {
+        userId: session.userId,
+        projectId: query.projectId,
+        eventType: "fs:read",
+        path: query.path,
+      });
       reply.send({ path: query.path, content });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
@@ -85,7 +100,8 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post("/fs/write", async (request, reply) => {
-    if (!(await requireSession(request, reply))) return;
+    const session = await requireSession(request, reply);
+    if (!session) return;
     const body = request.body as { projectId?: string; path: string; content: string; baseSha?: string };
     if (!body?.projectId || !body?.path) {
       reply.code(400).send({ error: { code: "missing_params", message: "projectId and path are required" } });
@@ -107,6 +123,13 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       await fs.mkdir(path.dirname(safePath.absolutePath), { recursive: true });
       await fs.writeFile(safePath.absolutePath, body.content, "utf8");
+      await recordAuditEvent(fastify, {
+        userId: session.userId,
+        projectId: body.projectId,
+        eventType: "fs:write",
+        path: body.path,
+        metadata: body.baseSha ? { baseSha: body.baseSha } : null,
+      });
       reply.send({ success: true, path: body.path, baseSha: body?.baseSha ?? null });
     } catch (err) {
       fastify.log.error({ err }, "Failed to write file");
@@ -115,7 +138,8 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/fs/diff", async (request, reply) => {
-    if (!(await requireSession(request, reply))) return;
+    const session = await requireSession(request, reply);
+    if (!session) return;
     const query = request.query as { projectId?: string; path?: string; baseSha?: string; targetSha?: string };
     if (!query.projectId || !query.path) {
       reply.code(400).send({ error: { code: "missing_params", message: "projectId and path are required" } });
@@ -154,6 +178,13 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
       const { promisify } = await import("node:util");
       const run = promisify(execFile);
       const result = await run("git", args, { cwd: projectRoot });
+      await recordAuditEvent(fastify, {
+        userId: session.userId,
+        projectId: query.projectId,
+        eventType: "fs:diff",
+        path: query.path,
+        metadata: { baseSha: baseSha ?? null, targetSha },
+      });
       reply.send({ path: query.path, diff: result.stdout ?? "" });
     } catch (err) {
       fastify.log.warn({ err }, "Failed to produce git diff; returning empty diff");

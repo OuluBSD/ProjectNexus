@@ -2,10 +2,12 @@ import type { FastifyPluginAsync } from "fastify";
 import { createTerminalSession, getTerminalSession, sendInput } from "../services/terminalManager";
 import { requireSession, validateToken } from "../utils/auth";
 import { findProject } from "../utils/projects";
+import { recordAuditEvent } from "../services/auditLogger";
 
 export const terminalRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/terminal/sessions", async (request, reply) => {
-    if (!(await requireSession(request, reply))) return;
+    const session = await requireSession(request, reply);
+    if (!session) return;
     const body = request.body as { projectId?: string; cwd?: string };
     if (body?.projectId) {
       const project = await findProject(fastify, body.projectId);
@@ -15,12 +17,19 @@ export const terminalRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const session = await createTerminalSession(body?.projectId, body?.cwd);
-    if (!session) {
+    const terminal = await createTerminalSession(body?.projectId, body?.cwd);
+    if (!terminal) {
       reply.code(400).send({ error: { code: "bad_path", message: "Failed to start terminal session" } });
       return;
     }
-    reply.code(201).send({ sessionId: session.id });
+    await recordAuditEvent(fastify, {
+      userId: session.userId,
+      projectId: body?.projectId ?? null,
+      eventType: "terminal:start",
+      sessionId: terminal.id,
+      metadata: body?.cwd ? { cwd: body.cwd } : null,
+    });
+    reply.code(201).send({ sessionId: terminal.id });
   });
 
   fastify.get("/terminal/sessions/:sessionId/stream", { websocket: true }, async (connection, request) => {
@@ -71,7 +80,8 @@ export const terminalRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post("/terminal/sessions/:sessionId/input", async (request, reply) => {
-    if (!(await requireSession(request, reply))) return;
+    const session = await requireSession(request, reply);
+    if (!session) return;
     const params = request.params as { sessionId: string };
     const body = request.body as { data?: string };
     if (!body?.data) {
@@ -83,6 +93,13 @@ export const terminalRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(404).send({ error: { code: "not_found", message: "Session not found" } });
       return;
     }
+    await recordAuditEvent(fastify, {
+      userId: session.userId,
+      eventType: "terminal:input",
+      projectId: getTerminalSession(params.sessionId)?.projectId,
+      sessionId: params.sessionId,
+      metadata: { preview: body.data.slice(0, 120) },
+    });
     reply.send({ accepted: true });
   });
 };

@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { requireSession } from "../utils/auth";
-import { getProjectRoot, sanitizeWorkspacePath } from "../utils/workspace";
+import { getProjectRoot, resolveWorkspacePath } from "../utils/workspace";
 import { findProject } from "../utils/projects";
 
 export const fileRoutes: FastifyPluginAsync = async (fastify) => {
@@ -21,7 +21,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const inputPath = (query.path ?? ".").replace(/^\//, "");
-    const safePath = sanitizeWorkspacePath(query.projectId, inputPath);
+    const safePath = await resolveWorkspacePath(query.projectId, inputPath);
     if (!safePath) {
       reply.code(400).send({ error: { code: "bad_path", message: "Invalid path" } });
       return;
@@ -65,7 +65,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
-    const safePath = sanitizeWorkspacePath(query.projectId, query.path.replace(/^\//, ""));
+    const safePath = await resolveWorkspacePath(query.projectId, query.path.replace(/^\//, ""));
     if (!safePath) {
       reply.code(400).send({ error: { code: "bad_path", message: "Invalid path" } });
       return;
@@ -98,7 +98,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
-    const safePath = sanitizeWorkspacePath(body.projectId, body.path.replace(/^\//, ""));
+    const safePath = await resolveWorkspacePath(body.projectId, body.path.replace(/^\//, ""));
     if (!safePath) {
       reply.code(400).send({ error: { code: "bad_path", message: "Invalid path" } });
       return;
@@ -128,7 +128,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
-    const safePath = sanitizeWorkspacePath(query.projectId, query.path.replace(/^\//, ""));
+    const safePath = await resolveWorkspacePath(query.projectId, query.path.replace(/^\//, ""));
     if (!safePath) {
       reply.code(400).send({ error: { code: "bad_path", message: "Invalid path" } });
       return;

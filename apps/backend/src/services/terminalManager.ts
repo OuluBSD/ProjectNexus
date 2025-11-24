@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { sanitizeWorkspacePath } from "../utils/workspace";
+import { resolveWorkspacePath } from "../utils/workspace";
 
 type ManagedSession = {
   id: string;
@@ -19,7 +19,7 @@ async function resolveWorkingDirectory(projectId?: string, cwd?: string) {
     return path.resolve(cwd ?? process.cwd());
   }
 
-  const safe = sanitizeWorkspacePath(projectId, cwd ?? ".");
+  const safe = await resolveWorkspacePath(projectId, cwd ?? ".");
   if (!safe) return null;
 
   try {

@@ -17,8 +17,8 @@ This replaces the earlier minimal TASKS.md. The tasks here are grouped into deve
 - [x] Implement initial DB models for Project/RoadmapList/ChatThread/Message
 - [x] Scaffold Projects API (list/create/update) to unblock UI wiring
 - [x] Cover Projects/Roadmaps/Chats endpoints with DB-backed tests
-- [ ] Wire Projects/Roadmaps/Chats UI to live APIs (replace mocks, handle empty DB)
-- [ ] Add a small seed or creation flow so fresh installs show demo data
+- [x] Wire Projects/Roadmaps/Chats UI to live APIs (replace mocks, handle empty DB)
+- [x] Add a small seed or creation flow so fresh installs show demo data
 
 ---
 

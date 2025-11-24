@@ -154,7 +154,7 @@ test("builds filter clauses for project, type, user, and path", async () => {
   const session = createSession("audit-user");
   const res = await app.inject({
     method: "GET",
-    url: "/audit/events?projectId=proj-1&eventType=fs:read&userId=u1&pathContains=.txt",
+    url: "/audit/events?projectId=proj-1&eventType=fs:read&userId=u1&pathContains=.txt&ipAddress=127.0.0.1",
     headers: { "x-session-token": session.token },
   });
 
@@ -166,6 +166,8 @@ test("builds filter clauses for project, type, user, and path", async () => {
   assert.ok(whereText.includes("fs:read"));
   assert.ok(whereText.includes("user_id"));
   assert.ok(whereText.includes("u1"));
+  assert.ok(whereText.includes("ip_address"));
+  assert.ok(whereText.includes("127.0.0.1"));
   assert.ok(whereText.toLowerCase().includes("like"));
   assert.ok(whereText.includes(".txt"));
   await app.close();

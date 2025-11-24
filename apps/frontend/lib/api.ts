@@ -161,7 +161,7 @@ export async function fetchAuditEvents(
   limit = 50,
   before?: string,
   cursor?: string,
-  filters?: { eventType?: string; userId?: string; pathContains?: string },
+  filters?: { eventType?: string; userId?: string; pathContains?: string; ipAddress?: string },
   sort: "asc" | "desc" = "desc"
 ): Promise<{
   events: {
@@ -185,6 +185,7 @@ export async function fetchAuditEvents(
   if (filters?.eventType) params.set("eventType", filters.eventType);
   if (filters?.userId) params.set("userId", filters.userId);
   if (filters?.pathContains) params.set("pathContains", filters.pathContains);
+  if (filters?.ipAddress) params.set("ipAddress", filters.ipAddress);
   if (sort) params.set("sort", sort);
   return fetchWithAuth(token, `/api/audit/events?${params.toString()}`);
 }

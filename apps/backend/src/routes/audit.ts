@@ -19,6 +19,7 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
       eventType?: string;
       userId?: string;
       pathContains?: string;
+      ipAddress?: string;
       sort?: "asc" | "desc";
     };
     const pageSize = Math.min(Number(query.limit ?? 50) || 50, 200);
@@ -58,6 +59,9 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
     }
     if (query.userId) {
       whereClauses.push(eq(schema.auditEvents.userId, query.userId));
+    }
+    if (query.ipAddress) {
+      whereClauses.push(eq(schema.auditEvents.ipAddress, query.ipAddress));
     }
     if (query.pathContains) {
       whereClauses.push(ilike(schema.auditEvents.path, `%${query.pathContains}%`));

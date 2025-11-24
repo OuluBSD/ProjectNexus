@@ -173,10 +173,11 @@ export default function Page() {
   const [fsBaseSha, setFsBaseSha] = useState<string>("");
   const [fsTargetSha, setFsTargetSha] = useState<string>("HEAD");
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [auditFilters, setAuditFilters] = useState<{ eventType: string; userId: string; pathContains: string }>({
+  const [auditFilters, setAuditFilters] = useState<{ eventType: string; userId: string; pathContains: string; ipAddress: string }>({
     eventType: "",
     userId: "",
     pathContains: "",
+    ipAddress: "",
   });
   const [auditProjectId, setAuditProjectId] = useState<string>("");
   const [auditSort, setAuditSort] = useState<"asc" | "desc">("desc");
@@ -713,6 +714,7 @@ export default function Page() {
       eventType: (options?.filtersOverride?.eventType ?? auditFilters.eventType) || undefined,
       userId: (options?.filtersOverride?.userId ?? auditFilters.userId) || undefined,
       pathContains: (options?.filtersOverride?.pathContains ?? auditFilters.pathContains) || undefined,
+      ipAddress: (options?.filtersOverride?.ipAddress ?? auditFilters.ipAddress) || undefined,
     };
     if (options?.reset) {
       setAuditEvents([]);
@@ -1091,6 +1093,13 @@ export default function Page() {
           />
           <input
             className="filter"
+            placeholder="IP address"
+            value={auditFilters.ipAddress}
+            onChange={(e) => setAuditFilters((prev) => ({ ...prev, ipAddress: e.target.value }))}
+            style={{ minWidth: 140 }}
+          />
+          <input
+            className="filter"
             placeholder="Path contains"
             value={auditFilters.pathContains}
             onChange={(e) => setAuditFilters((prev) => ({ ...prev, pathContains: e.target.value }))}
@@ -1117,7 +1126,7 @@ export default function Page() {
           <button
             className="ghost"
             onClick={() => {
-              const cleared = { eventType: "", userId: "", pathContains: "" };
+              const cleared = { eventType: "", userId: "", pathContains: "", ipAddress: "" };
               setAuditFilters(cleared);
               loadAuditLog(auditProjectId || undefined, { reset: true, filtersOverride: cleared });
             }}

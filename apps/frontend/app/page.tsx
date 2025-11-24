@@ -566,8 +566,10 @@ export default function Page() {
       setFsEntries(tree.entries);
       setFsPath(tree.path || targetPath || ".");
     } catch (err) {
-      setFsError(err instanceof Error ? err.message : "Failed to load tree");
+      const message = err instanceof Error ? err.message : "Failed to load tree";
+      setFsError(message);
       setFsEntries([]);
+      setFsToast({ message: "File list failed", detail: `${targetPath}: ${message}`, tone: "error" });
     } finally {
       setFsLoading(false);
     }
@@ -591,10 +593,12 @@ export default function Page() {
       setFsDraft(file.content);
       setFsSaveStatus(null);
     } catch (err) {
-      setFsError(err instanceof Error ? err.message : "Failed to load file");
+      const message = err instanceof Error ? err.message : "Failed to load file";
+      setFsError(message);
       setFsContent("");
       setFsContentPath(null);
       setFsDraft("");
+      setFsToast({ message: "Open failed", detail: `${path}: ${message}`, tone: "error" });
     } finally {
       setFsLoading(false);
     }
@@ -641,9 +645,11 @@ export default function Page() {
       setFsDiff(diff.diff ?? "");
       setFsDiffLoaded(true);
     } catch (err) {
-      setFsDiffError(err instanceof Error ? err.message : "Failed to load diff");
+      const message = err instanceof Error ? err.message : "Failed to load diff";
+      setFsDiffError(message);
       setFsDiff("");
       setFsDiffLoaded(false);
+      setFsToast({ message: "Diff load failed", detail: `${fsContentPath}: ${message}`, tone: "error" });
     } finally {
       setFsDiffLoading(false);
     }

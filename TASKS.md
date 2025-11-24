@@ -10,6 +10,8 @@ This replaces the earlier minimal TASKS.md. The tasks here are grouped into deve
 - [x] Add Code tab toast for file-save errors (mirror success case)
 - [x] Quiet Code tab hook dependency lint warnings
 - [x] Run full backend/frontend test suites after recent changes
+- [x] Add Code tab toasts for file load/diff failures
+- [ ] Remove Code tab hook dependency lint suppressions via stable callbacks
 
 ---
 

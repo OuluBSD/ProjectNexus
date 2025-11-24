@@ -53,3 +53,68 @@ test("purgeExpiredSessions issues a delete against session table", async () => {
   assert.equal(calls[0].table, schema.sessions);
   assert.ok(calls[0].condition);
 });
+
+test("successful login clears throttle attempts for the user/ip pair", async () => {
+  const app = Fastify({ logger: false });
+  await app.register(authRoutes, { prefix: "/auth" });
+  await app.ready();
+
+  const ip = "10.0.0.5";
+  const attemptKey = loginThrottleState.loginAttemptKey("throttle-clear", ip);
+  loginThrottleState.recordFailure(attemptKey);
+  assert.ok(loginThrottleState.attempts.has(attemptKey));
+
+  try {
+    const ok = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { username: "throttle-clear", password: "pw" },
+      remoteAddress: ip,
+    });
+    assert.equal(ok.statusCode, 200);
+    assert.ok(!loginThrottleState.attempts.has(attemptKey));
+  } finally {
+    loginThrottleState.attempts.clear();
+    await app.close();
+  }
+});
+
+test("throttle unblocks after block window elapses", async () => {
+  const app = Fastify({ logger: false });
+  await app.register(authRoutes, { prefix: "/auth" });
+  await app.ready();
+
+  const ip = "192.168.1.2";
+  const attemptKey = loginThrottleState.loginAttemptKey("slow-user", ip);
+  for (let i = 0; i < loginThrottleState.maxFailures; i++) {
+    loginThrottleState.recordFailure(attemptKey);
+  }
+
+  try {
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { username: "slow-user", password: "pw" },
+      remoteAddress: ip,
+    });
+    assert.equal(blocked.statusCode, 429);
+
+    const now = Date.now();
+    loginThrottleState.attempts.set(attemptKey, {
+      failures: loginThrottleState.maxFailures,
+      firstAttempt: now - loginThrottleState.windowMs - 1000,
+      blockedUntil: now - 1000,
+    });
+
+    const allowed = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { username: "slow-user", password: "pw" },
+      remoteAddress: ip,
+    });
+    assert.equal(allowed.statusCode, 200);
+  } finally {
+    loginThrottleState.attempts.clear();
+    await app.close();
+  }
+});

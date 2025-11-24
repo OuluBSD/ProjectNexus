@@ -128,6 +128,51 @@ export async function createChat(
   return res.json();
 }
 
+export async function fetchChatMessages(
+  token: string,
+  chatId: string
+): Promise<{ id: string; chatId: string; role: string; content: string; createdAt: string }[]> {
+  return fetchWithAuth(token, `/api/chats/${chatId}/messages`);
+}
+
+export async function postChatMessage(
+  token: string,
+  chatId: string,
+  payload: { role: "user" | "assistant" | "system" | "status" | "meta"; content: string }
+): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to append message (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updateChatStatus(
+  token: string,
+  chatId: string,
+  payload: { status?: string; progress?: number; focus?: string }
+): Promise<{ id: string; status: string; progress: number; metadata?: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}/status`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update chat status (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchFileTree(
   token: string,
   projectId: string,

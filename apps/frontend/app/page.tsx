@@ -11,6 +11,7 @@ import {
   fetchRoadmapStatus,
   fetchRoadmaps,
   fetchFileDiff,
+  fetchChatMessages,
   createProject,
   createRoadmap,
   createChat,
@@ -18,6 +19,8 @@ import {
   login,
   fetchAuditEvents,
   sendTerminalInput,
+  postChatMessage,
+  updateChatStatus,
 } from "../lib/api";
 
 type Status =
@@ -34,6 +37,7 @@ const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "demo";
 const DEMO_KEYFILE = process.env.NEXT_PUBLIC_DEMO_KEYFILE_TOKEN;
 const PROJECT_STORAGE_KEY = "agentmgr:selectedProject";
 const ROADMAP_STORAGE_KEY = "agentmgr:selectedRoadmap";
+const CHAT_STORAGE_KEY = "agentmgr:selectedChat";
 
 type ProjectItem = { id?: string; name: string; category: string; status: Status; info: string };
 type RoadmapItem = {
@@ -52,6 +56,13 @@ type ChatItem = {
   progress: number;
   note?: string;
   meta?: boolean;
+};
+type MessageItem = {
+  id: string;
+  chatId: string;
+  role: "user" | "assistant" | "system" | "status" | "meta";
+  content: string;
+  createdAt: string;
 };
 type AuditEvent = {
   id: string;
@@ -159,6 +170,7 @@ export default function Page() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [roadmapStatus, setRoadmapStatus] = useState<
     Record<string, { status: Status; progress: number; summary?: string }>
   >({});
@@ -194,6 +206,15 @@ export default function Page() {
   const [fsBaseSha, setFsBaseSha] = useState<string>("");
   const [fsTargetSha, setFsTargetSha] = useState<string>("HEAD");
   const [fsToast, setFsToast] = useState<ToastMessage | null>(null);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [chatStatusDraft, setChatStatusDraft] = useState<Status>("in_progress");
+  const [chatProgressDraft, setChatProgressDraft] = useState<string>("0");
+  const [chatFocusDraft, setChatFocusDraft] = useState("");
+  const [chatUpdateMessage, setChatUpdateMessage] = useState<string | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [auditFilters, setAuditFilters] = useState<{
     eventType: string;
@@ -246,6 +267,30 @@ export default function Page() {
 
   const eventTypeOptions = Array.from(new Set(auditEvents.map((e) => e.eventType))).sort();
 
+  const readStoredChat = useCallback((roadmapId: string | null) => {
+    if (typeof window === "undefined" || !roadmapId) return null;
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { roadmapId?: string; chatId?: string };
+      if (parsed?.roadmapId === roadmapId && typeof parsed.chatId === "string") {
+        return parsed.chatId;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return null;
+  }, []);
+
+  const persistChatSelection = useCallback((roadmapId: string, chatId: string | null) => {
+    if (typeof window === "undefined") return;
+    if (!chatId) {
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ roadmapId, chatId }));
+  }, []);
+
   const ensureStatus = useCallback(async (roadmapId: string, token: string) => {
     const existing = roadmapStatusRef.current[roadmapId];
     if (existing) return existing;
@@ -264,6 +309,30 @@ export default function Page() {
     }
   }, []);
 
+  const loadMessagesForChat = useCallback(async (chatId: string, token: string) => {
+    if (!chatId) {
+      setMessages([]);
+      setMessagesError("Select a chat to load messages.");
+      return;
+    }
+    if (chatId.startsWith("meta-")) {
+      setMessages([]);
+      setMessagesError("Meta-chat messages are read-only and not yet surfaced here.");
+      return;
+    }
+    setMessagesLoading(true);
+    setMessagesError(null);
+    try {
+      const items = await fetchChatMessages(token, chatId);
+      setMessages(items as MessageItem[]);
+    } catch (err) {
+      setMessagesError(err instanceof Error ? err.message : "Failed to load messages");
+      setMessages([]);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, []);
+
   const clearWorkspaceState = useCallback((reason?: string) => {
     if (reason) setStatusMessage(reason);
     setSessionToken(null);
@@ -273,9 +342,11 @@ export default function Page() {
     setChats([]);
     setSelectedProjectId(null);
     setSelectedRoadmapId(null);
+    setSelectedChatId(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem(PROJECT_STORAGE_KEY);
       localStorage.removeItem(ROADMAP_STORAGE_KEY);
+      localStorage.removeItem(CHAT_STORAGE_KEY);
     }
     setTerminalSessionId(null);
     setTerminalOutput("Connect to stream to see output.");
@@ -299,6 +370,13 @@ export default function Page() {
     setCreatingProject(false);
     setCreatingRoadmap(false);
     setCreatingChat(false);
+    setMessages([]);
+    setMessagesError(null);
+    setMessageDraft("");
+    setChatProgressDraft("0");
+    setChatStatusDraft("in_progress");
+    setChatFocusDraft("");
+    setChatUpdateMessage(null);
   }, []);
 
   const updateTerminalStatusFromText = (text: string) => {
@@ -343,6 +421,18 @@ export default function Page() {
           })),
         ].filter(Boolean) as ChatItem[];
         setChats(mappedChats);
+        const storedChatId = readStoredChat(roadmapId);
+        const fallbackChatId =
+          storedChatId && mappedChats.some((c) => c.id === storedChatId)
+            ? storedChatId
+            : (mappedChats.find((c) => c.id && !c.meta)?.id ?? null);
+        setSelectedChatId(fallbackChatId);
+        if (fallbackChatId) {
+          persistChatSelection(roadmapId, fallbackChatId);
+          await loadMessagesForChat(fallbackChatId, token);
+        } else {
+          setMessages([]);
+        }
         setStatusMessage(mappedChats.length ? null : "No chats for this roadmap yet.");
       } catch (err) {
         setStatusMessage("Failed to load chats.");
@@ -350,7 +440,7 @@ export default function Page() {
         setChats([]);
       }
     },
-    [ensureStatus]
+    [ensureStatus, loadMessagesForChat, persistChatSelection, readStoredChat]
   );
 
   const loadRoadmapsForProject = useCallback(
@@ -406,6 +496,10 @@ export default function Page() {
         } else {
           setChats([]);
           setSelectedRoadmapId(null);
+          setSelectedChatId(null);
+          setMessages([]);
+          setMessageDraft("");
+          setMessagesError(null);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load roadmaps");
@@ -413,6 +507,10 @@ export default function Page() {
         setRoadmaps([]);
         setChats([]);
         setSelectedRoadmapId(null);
+        setSelectedChatId(null);
+        setMessages([]);
+        setMessageDraft("");
+        setMessagesError(null);
       }
     },
     [loadChatsForRoadmap]
@@ -486,6 +584,10 @@ export default function Page() {
 
   const handleSelectRoadmap = async (roadmapId: string) => {
     setSelectedRoadmapId(roadmapId);
+    setSelectedChatId(null);
+    setMessages([]);
+    setMessageDraft("");
+    setMessagesError(null);
     if (typeof window !== "undefined") localStorage.setItem(ROADMAP_STORAGE_KEY, roadmapId);
     if (sessionToken) {
       await loadChatsForRoadmap(roadmapId, sessionToken, roadmapStatus[roadmapId]);
@@ -494,12 +596,35 @@ export default function Page() {
 
   const handleSelectProject = async (projectId: string) => {
     setSelectedProjectId(projectId);
+    setSelectedChatId(null);
+    setMessages([]);
+    setMessageDraft("");
+    setMessagesError(null);
     if (typeof window !== "undefined") localStorage.setItem(PROJECT_STORAGE_KEY, projectId);
     if (sessionToken) {
       setSelectedRoadmapId(null);
       await loadRoadmapsForProject(projectId, sessionToken);
     }
   };
+
+  const handleSelectChat = useCallback(
+    async (chat: ChatItem) => {
+      if (!chat.id) return;
+      setSelectedChatId(chat.id);
+      setMessagesError(null);
+      setMessageDraft("");
+      if (selectedRoadmapId) {
+        persistChatSelection(selectedRoadmapId, chat.id);
+      }
+      if (sessionToken && !chat.meta) {
+        await loadMessagesForChat(chat.id, sessionToken);
+      } else if (chat.meta) {
+        setMessages([]);
+        setMessagesError("Meta-chat messages are not shown yet.");
+      }
+    },
+    [loadMessagesForChat, persistChatSelection, selectedRoadmapId, sessionToken]
+  );
 
   const handleLoginSubmit = async () => {
     if (!username) {
@@ -648,14 +773,17 @@ export default function Page() {
     setCreatingChat(true);
     setError(null);
     try {
-      await createChat(sessionToken, selectedRoadmapId, {
+      const { id } = await createChat(sessionToken, selectedRoadmapId, {
         title,
         goal: chatDraft.goal.trim() || undefined,
         status: "in_progress",
         progress: 0,
       });
       setChatDraft({ title: "", goal: "" });
+      persistChatSelection(selectedRoadmapId, id);
       await loadChatsForRoadmap(selectedRoadmapId, sessionToken, roadmapStatus[selectedRoadmapId]);
+      setSelectedChatId(id);
+      await loadMessagesForChat(id, sessionToken);
       setStatusMessage("Chat created.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create chat");
@@ -669,6 +797,81 @@ export default function Page() {
     loadChatsForRoadmap,
     roadmapStatus,
     selectedRoadmapId,
+    sessionToken,
+    persistChatSelection,
+    loadMessagesForChat,
+  ]);
+
+  const handleSendMessage = useCallback(async () => {
+    if (!sessionToken) {
+      setMessagesError("Login to send a message.");
+      return;
+    }
+    if (!selectedChatId) {
+      setMessagesError("Select a chat to send a message.");
+      return;
+    }
+    if (selectedChatId.startsWith("meta-")) {
+      setMessagesError("Meta-chat messages are not supported yet.");
+      return;
+    }
+    const content = messageDraft.trim();
+    if (!content) return;
+    setSendingMessage(true);
+    setMessagesError(null);
+    try {
+      await postChatMessage(sessionToken, selectedChatId, { role: "user", content });
+      setMessageDraft("");
+      await loadMessagesForChat(selectedChatId, sessionToken);
+    } catch (err) {
+      setMessagesError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setSendingMessage(false);
+    }
+  }, [loadMessagesForChat, messageDraft, selectedChatId, sessionToken]);
+
+  const handleUpdateChatStatus = useCallback(async () => {
+    if (!sessionToken || !selectedChatId) {
+      setChatUpdateMessage("Select a chat first.");
+      return;
+    }
+    if (selectedChatId.startsWith("meta-")) {
+      setChatUpdateMessage("Meta-chat status comes from child chats.");
+      return;
+    }
+    const parsedProgress = Math.max(
+      0,
+      Math.min(100, Number.isFinite(Number(chatProgressDraft)) ? Number(chatProgressDraft) : 0)
+    );
+    try {
+      const updated = await updateChatStatus(sessionToken, selectedChatId, {
+        status: chatStatusDraft,
+        progress: parsedProgress / 100,
+        focus: chatFocusDraft.trim() || undefined,
+      });
+      setChatUpdateMessage("Status updated.");
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === updated.id
+            ? {
+                ...chat,
+                status: (updated.status as Status) ?? chat.status,
+                progress: updated.progress ?? chat.progress,
+                note: chatFocusDraft.trim() || chat.note,
+              }
+            : chat
+        )
+      );
+      await loadMessagesForChat(selectedChatId, sessionToken);
+    } catch (err) {
+      setChatUpdateMessage(err instanceof Error ? err.message : "Failed to update status");
+    }
+  }, [
+    chatFocusDraft,
+    chatProgressDraft,
+    chatStatusDraft,
+    loadMessagesForChat,
+    selectedChatId,
     sessionToken,
   ]);
 
@@ -973,6 +1176,23 @@ export default function Page() {
     return () => clearTimeout(timer);
   }, [fsToast]);
 
+  useEffect(() => {
+    if (!selectedChatId) {
+      setChatStatusDraft("in_progress");
+      setChatProgressDraft("0");
+      setChatFocusDraft("");
+      setChatUpdateMessage(null);
+      return;
+    }
+    const chat = chats.find((c) => c.id === selectedChatId);
+    if (chat) {
+      setChatStatusDraft(chat.status);
+      setChatProgressDraft(String(progressPercent(chat.progress)));
+      setChatFocusDraft(chat.note ?? "");
+      setChatUpdateMessage(null);
+    }
+  }, [chats, selectedChatId]);
+
   const loadAuditLog = useCallback(
     async (
       projectId?: string,
@@ -1037,6 +1257,9 @@ export default function Page() {
       setAuditProjectId(selectedProjectId);
     }
   }, [selectedProjectId, auditProjectId]);
+
+  const selectedChat = chats.find((c) => c.id === selectedChatId);
+  const isMetaChatSelected = selectedChat?.meta;
 
   const tabBody = (() => {
     switch (activeTab) {
@@ -1226,14 +1449,163 @@ export default function Page() {
           </div>
         );
       default:
+        if (!selectedChat) {
+          return (
+            <div className="panel-card">
+              <div className="panel-title">Chat</div>
+              <div className="panel-text">
+                Pick a chat in the right column to view messages and update status.
+              </div>
+              <div className="panel-mono">
+                {'{ status: "in_progress", progress: 0.42, focus: "Implement FS API" }'}
+              </div>
+            </div>
+          );
+        }
+        if (isMetaChatSelected) {
+          return (
+            <div className="panel-card">
+              <div className="panel-title">Meta-Chat</div>
+              <div className="panel-text">
+                Roadmap-level summaries from child chats will appear here once wired.
+              </div>
+              <div className="panel-mono">
+                Aggregated status: {progressPercent(selectedChat.progress)}% · {selectedChat.status}
+              </div>
+              <div className="item-subtle">{selectedChat.note}</div>
+            </div>
+          );
+        }
         return (
           <div className="panel-card">
-            <div className="panel-title">Chat</div>
-            <div className="panel-text">
-              JSON-before-stop summaries, template metadata, and message stream go here.
+            <div className="item-line" style={{ gap: 10 }}>
+              <div className="panel-title" style={{ margin: 0 }}>
+                {selectedChat.title}
+              </div>
+              <span className="item-subtle">
+                {progressPercent(selectedChat.progress)}% · {selectedChat.status}
+              </span>
+              <span
+                className="status-dot"
+                style={{ background: statusColor[selectedChat.status] ?? statusColor.active }}
+              />
+              <div style={{ flex: 1 }} />
+              <button
+                className="ghost"
+                onClick={() =>
+                  sessionToken &&
+                  selectedChatId &&
+                  loadMessagesForChat(selectedChatId, sessionToken)
+                }
+                disabled={!sessionToken || messagesLoading}
+              >
+                {messagesLoading ? "Refreshing…" : "Refresh"}
+              </button>
             </div>
-            <div className="panel-mono">
-              {'{ status: "in_progress", progress: 0.42, focus: "Implement FS API" }'}
+            <div className="panel-text">{selectedChat.note || "No goal/summary yet."}</div>
+            <div className="login-row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <select
+                className="filter"
+                value={chatStatusDraft}
+                onChange={(e) => setChatStatusDraft(e.target.value as Status)}
+                style={{ minWidth: 140 }}
+              >
+                {["in_progress", "active", "waiting", "blocked", "done", "idle"].map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="filter"
+                style={{ width: 90 }}
+                value={chatProgressDraft}
+                onChange={(e) => setChatProgressDraft(e.target.value)}
+                placeholder="%"
+              />
+              <input
+                className="filter"
+                style={{ flex: 1, minWidth: 200 }}
+                value={chatFocusDraft}
+                onChange={(e) => setChatFocusDraft(e.target.value)}
+                placeholder="Focus / summary"
+              />
+              <button className="tab" onClick={handleUpdateChatStatus} disabled={messagesLoading}>
+                Update status
+              </button>
+              {chatUpdateMessage && (
+                <span className="item-subtle" style={{ color: "#94a3b8" }}>
+                  {chatUpdateMessage}
+                </span>
+              )}
+            </div>
+            {messagesError && (
+              <div className="item-subtle" style={{ color: "#ef4444" }}>
+                {messagesError}
+              </div>
+            )}
+            <div className="chat-stream">
+              {messagesLoading && <div className="item-subtle">Loading messages…</div>}
+              {!messagesLoading && messages.length === 0 && (
+                <div className="item-subtle">No messages yet.</div>
+              )}
+              {messages.map((message) => (
+                <div className="chat-row" key={message.id}>
+                  <span
+                    className="chat-role"
+                    style={{
+                      background:
+                        {
+                          user: "rgba(14,165,233,0.2)",
+                          assistant: "rgba(94,234,212,0.18)",
+                          status: "rgba(245,158,11,0.18)",
+                          system: "rgba(148,163,184,0.2)",
+                          meta: "rgba(168,85,247,0.2)",
+                        }[message.role] ?? "rgba(148,163,184,0.2)",
+                      color:
+                        {
+                          user: "#bae6fd",
+                          assistant: "#a7f3d0",
+                          status: "#fcd34d",
+                          system: "#cbd5e1",
+                          meta: "#ddd6fe",
+                        }[message.role] ?? "#e5e7eb",
+                    }}
+                  >
+                    {message.role}
+                  </span>
+                  <div className="bubble">{message.content}</div>
+                  <span className="item-subtle">
+                    {new Date(message.createdAt).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="login-row" style={{ alignItems: "flex-start", gap: 8 }}>
+              <textarea
+                className="code-input"
+                style={{ minHeight: 120, flex: 1 }}
+                placeholder="Send a message to this chat"
+                value={messageDraft}
+                onChange={(e) => setMessageDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                disabled={!sessionToken || sendingMessage}
+              />
+              <button
+                className="tab"
+                style={{ alignSelf: "stretch", minHeight: 44 }}
+                onClick={handleSendMessage}
+                disabled={
+                  sendingMessage || !messageDraft.trim() || !sessionToken || !selectedChatId
+                }
+              >
+                {sendingMessage ? "Sending…" : "Send"}
+              </button>
             </div>
           </div>
         );
@@ -1446,7 +1818,12 @@ export default function Page() {
               <div className="item-subtle">No chats for this roadmap yet.</div>
             )}
             {chats.map((c) => (
-              <div className={`item ${c.meta ? "meta" : ""}`} key={c.title}>
+              <div
+                className={`item ${c.meta ? "meta" : ""} ${selectedChatId === c.id ? "active" : ""}`}
+                key={c.id ?? c.title}
+                onClick={() => handleSelectChat(c)}
+                style={{ cursor: c.id ? "pointer" : "default" }}
+              >
                 <div className="item-line">
                   <span
                     className="status-dot"

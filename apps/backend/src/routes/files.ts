@@ -47,7 +47,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
         projectId: query.projectId,
         eventType: "fs:tree",
         path: inputPath,
-        metadata: { entryCount: payload.length },
+        metadata: { entryCount: payload.length, ip: request.ip },
       });
       reply.send({ path: inputPath, entries: payload });
     } catch (err) {
@@ -93,6 +93,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
           bytes: Buffer.byteLength(content, "utf8"),
           preview,
           truncated: content.length > preview.length,
+          ip: request.ip,
         },
       });
       reply.send({ path: query.path, content });
@@ -141,6 +142,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
           bytes: Buffer.byteLength(body.content, "utf8"),
           preview,
           truncated: body.content.length > preview.length,
+          ip: request.ip,
         },
       });
       reply.send({ success: true, path: body.path, baseSha: body?.baseSha ?? null });
@@ -200,6 +202,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
           baseSha: baseSha ?? null,
           targetSha,
           diffBytes: Buffer.byteLength(result.stdout ?? "", "utf8"),
+          ip: request.ip,
         },
       });
       reply.send({ path: query.path, diff: result.stdout ?? "" });

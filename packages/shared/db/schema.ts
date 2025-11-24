@@ -11,6 +11,7 @@ import {
   timestamp,
   jsonb,
   numeric,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const projects = pgTable("projects", {
@@ -118,13 +119,21 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const auditEvents = pgTable("audit_events", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
-  projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
-  eventType: varchar("event_type", { length: 64 }).notNull(),
-  path: text("path"),
-  sessionId: varchar("session_id", { length: 255 }),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    eventType: varchar("event_type", { length: 64 }).notNull(),
+    path: text("path"),
+    sessionId: varchar("session_id", { length: 255 }),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    auditProjectIdIdx: index("audit_events_project_id_idx").on(table.projectId),
+    auditEventTypeIdx: index("audit_events_event_type_idx").on(table.eventType),
+    auditCreatedAtIdx: index("audit_events_created_at_idx").on(table.createdAt),
+  })
+);

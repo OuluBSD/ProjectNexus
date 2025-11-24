@@ -42,28 +42,33 @@ test("file routes emit audit metadata for tree and read", async () => {
   await app.register(fileRoutes);
   await app.ready();
   const session = createSession("fs-user");
+  const ip = "203.0.113.10";
 
   try {
     const treeRes = await app.inject({
       method: "GET",
       url: `/fs/tree?projectId=${project.id}`,
       headers: { "x-session-token": session.token },
+      remoteAddress: ip,
     });
     assert.equal(treeRes.statusCode, 200);
     const treeLog = logs.find((log) => (log.obj as any)?.audit?.eventType === "fs:tree");
     assert.ok(treeLog, "tree audit payload captured");
     assert.equal((treeLog!.obj as any).audit.metadata?.entryCount, 1);
+    assert.equal((treeLog!.obj as any).audit.metadata?.ip, ip);
 
     const readRes = await app.inject({
       method: "GET",
       url: `/fs/file?projectId=${project.id}&path=a.txt`,
       headers: { "x-session-token": session.token },
+      remoteAddress: ip,
     });
     assert.equal(readRes.statusCode, 200);
     const readLog = logs.find((log) => (log.obj as any)?.audit?.eventType === "fs:read");
     assert.ok(readLog, "read audit payload captured");
     assert.equal((readLog!.obj as any).audit.metadata?.bytes, Buffer.byteLength("hello world", "utf8"));
     assert.equal((readLog!.obj as any).audit.metadata?.truncated, false);
+    assert.equal((readLog!.obj as any).audit.metadata?.ip, ip);
   } finally {
     await app.close();
     rmSync(root, { recursive: true, force: true });
@@ -108,6 +113,7 @@ test("file routes emit audit metadata for write and diff", async () => {
   await app.register(fileRoutes);
   await app.ready();
   const session = createSession("fs-writer");
+  const ip = "203.0.113.22";
 
   try {
     const updated = "second version\nwith more text\n";
@@ -116,6 +122,7 @@ test("file routes emit audit metadata for write and diff", async () => {
       url: "/fs/write",
       headers: { "x-session-token": session.token },
       payload: { projectId: project.id, path: "note.txt", content: updated, baseSha: "abc123" },
+      remoteAddress: ip,
     });
     assert.equal(writeRes.statusCode, 200);
     const writeLog = logs.find((log) => (log.obj as any)?.audit?.eventType === "fs:write");
@@ -124,11 +131,13 @@ test("file routes emit audit metadata for write and diff", async () => {
     assert.equal(writeMeta?.baseSha, "abc123");
     assert.equal(writeMeta?.bytes, Buffer.byteLength(updated, "utf8"));
     assert.equal(writeMeta?.truncated, false);
+    assert.equal(writeMeta?.ip, ip);
 
     const diffRes = await app.inject({
       method: "GET",
       url: `/fs/diff?projectId=${project.id}&path=note.txt`,
       headers: { "x-session-token": session.token },
+      remoteAddress: ip,
     });
     assert.equal(diffRes.statusCode, 200);
     const diffLog = logs.find((log) => (log.obj as any)?.audit?.eventType === "fs:diff");
@@ -137,6 +146,7 @@ test("file routes emit audit metadata for write and diff", async () => {
     assert.equal(diffMeta?.baseSha, null);
     assert.equal(diffMeta?.targetSha, "HEAD");
     assert.ok((diffMeta?.diffBytes ?? 0) > 0, "diffBytes captured");
+    assert.equal(diffMeta?.ip, ip);
   } finally {
     await app.close();
     rmSync(root, { recursive: true, force: true });

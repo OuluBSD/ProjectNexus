@@ -39,6 +39,7 @@ test("terminal input emits audit metadata", async () => {
   await app.ready();
   const session = createSession("term-user");
   let terminalSessionId: string | null = null;
+  const ip = "198.51.100.8";
 
   try {
     const startRes = await app.inject({
@@ -46,6 +47,7 @@ test("terminal input emits audit metadata", async () => {
       url: "/terminal/sessions",
       headers: { "x-session-token": session.token },
       payload: { projectId: project.id },
+      remoteAddress: ip,
     });
     assert.equal(startRes.statusCode, 201);
     terminalSessionId = (startRes.json() as any).sessionId;
@@ -57,12 +59,14 @@ test("terminal input emits audit metadata", async () => {
       url: `/terminal/sessions/${terminalSessionId}/input`,
       headers: { "x-session-token": session.token },
       payload: { data: input },
+      remoteAddress: ip,
     });
     assert.equal(inputRes.statusCode, 200);
 
     const startLog = logs.find((log) => (log.obj as any)?.audit?.eventType === "terminal:start");
     assert.ok(startLog, "start audit payload captured");
     assert.equal((startLog!.obj as any).audit.sessionId, terminalSessionId);
+    assert.equal((startLog!.obj as any).audit.metadata?.ip, ip);
 
     const inputLog = logs.find((log) => (log.obj as any)?.audit?.eventType === "terminal:input");
     assert.ok(inputLog, "input audit payload captured");
@@ -70,6 +74,7 @@ test("terminal input emits audit metadata", async () => {
     assert.equal(meta?.preview, input.slice(0, 120));
     assert.equal(meta?.bytes, Buffer.byteLength(input, "utf8"));
     assert.equal(meta?.truncated, false);
+    assert.equal(meta?.ip, ip);
   } finally {
     if (terminalSessionId) {
       closeTerminalSession(terminalSessionId);

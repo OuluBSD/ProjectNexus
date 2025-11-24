@@ -21,7 +21,7 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
       pathContains?: string;
       sort?: "asc" | "desc";
     };
-    const limit = Math.min(Number(query.limit ?? 50) || 50, 200);
+    const pageSize = Math.min(Number(query.limit ?? 50) || 50, 200);
     const beforeDate = query.before ? new Date(query.before) : null;
     const cursorParts = query.cursor?.split("|");
     const cursorDate = cursorParts?.[0] ? new Date(cursorParts[0]) : null;
@@ -46,7 +46,7 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
           : desc(schema.auditEvents.createdAt),
         orderDirection === "asc" ? asc(schema.auditEvents.id) : desc(schema.auditEvents.id)
       )
-      .limit(limit);
+      .limit(pageSize + 1);
 
     const whereClauses: SQL[] = [];
     if (query.projectId) {
@@ -78,16 +78,16 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
 
     const rows = await builder;
 
-    const last = rows[rows.length - 1];
+    const hasMore = rows.length > pageSize;
+    const events = hasMore ? rows.slice(0, pageSize) : rows;
+    const last = events[events.length - 1];
     const nextCursor =
-      rows.length && last.createdAt
-        ? `${last.createdAt.toISOString()}|${last.id}`
-        : undefined;
+      hasMore && events.length && last?.createdAt ? `${last.createdAt.toISOString()}|${last.id}` : undefined;
 
     reply.send({
-      events: rows,
+      events,
       paging: {
-        hasMore: rows.length === limit,
+        hasMore,
         nextCursor,
       },
     });

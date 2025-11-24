@@ -13,14 +13,15 @@
     "@fastify/cors": "^8.5.0",
     "@fastify/websocket": "^7.0.1",
     "@nexus/shared": "workspace:*",
-    "drizzle-orm": "^0.44.7",
     "dotenv": "^16.3.1",
+    "drizzle-orm": "^0.44.7",
     "fastify": "^4.27.0",
     "pg": "^8.11.3",
     "pino": "^8.17.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "@types/node": "20.10.5",
     "@types/pg": "^8.11.10",
     "tsx": "^4.16.0",

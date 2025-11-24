@@ -20,6 +20,7 @@ This replaces the earlier minimal TASKS.md. The tasks here are grouped into deve
 - [x] Wire Projects/Roadmaps/Chats UI to live APIs (replace mocks, handle empty DB)
 - [x] Add a small seed or creation flow so fresh installs show demo data
 - [x] Add UI flows to create projects, roadmaps, and chats from the main page
+- [ ] Add path-based routes that mirror selection state (`/projects/:projectId/roadmaps/:roadmapId/chats/:chatId`)
 
 ---
 

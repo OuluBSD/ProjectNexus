@@ -1,7 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchChats, fetchProjects, fetchRoadmapStatus, fetchRoadmaps, login } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import {
+  buildTerminalWsUrl,
+  createTerminalSession,
+  fetchChats,
+  fetchFileContent,
+  fetchFileTree,
+  fetchProjects,
+  fetchRoadmapStatus,
+  fetchRoadmaps,
+  login,
+  sendTerminalInput,
+} from "../lib/api";
 
 type Status = "inactive" | "waiting" | "active" | "blocked" | "done" | "in_progress" | "idle" | "error";
 const DEMO_USERNAME = process.env.NEXT_PUBLIC_DEMO_USERNAME ?? "demo";
@@ -75,6 +86,17 @@ export default function Page() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
+  const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
+  const [terminalOutput, setTerminalOutput] = useState<string>("Connect to stream to see output.");
+  const [terminalInput, setTerminalInput] = useState<string>("");
+  const [terminalConnecting, setTerminalConnecting] = useState(false);
+  const terminalSocket = useRef<WebSocket | null>(null);
+  const [fsPath, setFsPath] = useState<string>(".");
+  const [fsEntries, setFsEntries] = useState<{ type: "dir" | "file"; name: string }[]>([]);
+  const [fsContentPath, setFsContentPath] = useState<string | null>(null);
+  const [fsContent, setFsContent] = useState<string>("");
+  const [fsLoading, setFsLoading] = useState(false);
+  const [fsError, setFsError] = useState<string | null>(null);
 
   const ensureStatus = async (roadmapId: string, token: string) => {
     const existing = roadmapStatus[roadmapId];
@@ -106,6 +128,12 @@ export default function Page() {
       localStorage.removeItem(PROJECT_STORAGE_KEY);
       localStorage.removeItem(ROADMAP_STORAGE_KEY);
     }
+    setTerminalSessionId(null);
+    setTerminalOutput("Connect to stream to see output.");
+    setFsEntries([]);
+    setFsContent("");
+    setFsContentPath(null);
+    setFsPath(".");
   };
 
   const loadChatsForRoadmap = async (
@@ -299,22 +327,233 @@ export default function Page() {
     }
   };
 
-  const tabBody = useMemo(() => {
+  const connectTerminalStream = (sessionId: string, token: string) => {
+    if (!sessionId || !token) return;
+    if (terminalSocket.current) {
+      terminalSocket.current.close();
+      terminalSocket.current = null;
+    }
+    setTerminalConnecting(true);
+    setTerminalOutput("Connecting to terminal…\n");
+    const ws = new WebSocket(buildTerminalWsUrl(token, sessionId));
+    terminalSocket.current = ws;
+
+    ws.onopen = () => {
+      setTerminalConnecting(false);
+      setTerminalOutput((prev) => `${prev}[connected to ${sessionId}]\n`);
+    };
+
+    ws.onmessage = (event) => {
+      if (typeof event.data === "string") {
+        setTerminalOutput((prev) => `${prev}${event.data}`);
+      } else if (event.data instanceof Blob) {
+        event.data.text().then((text) => setTerminalOutput((prev) => `${prev}${text}`));
+      } else if (event.data instanceof ArrayBuffer) {
+        const text = new TextDecoder().decode(new Uint8Array(event.data));
+        setTerminalOutput((prev) => `${prev}${text}`);
+      }
+    };
+
+    ws.onerror = () => setTerminalOutput((prev) => `${prev}\n[stream error]\n`);
+    ws.onclose = () => {
+      setTerminalConnecting(false);
+      setTerminalOutput((prev) => `${prev}\n[stream closed]\n`);
+    };
+  };
+
+  const startTerminalSession = async () => {
+    if (!sessionToken) {
+      setStatusMessage("Login to start a terminal session.");
+      return;
+    }
+    setTerminalConnecting(true);
+    setTerminalOutput("Starting terminal session…\n");
+    try {
+      const { sessionId } = await createTerminalSession(sessionToken, selectedProjectId ?? undefined);
+      setTerminalSessionId(sessionId);
+      connectTerminalStream(sessionId, sessionToken);
+    } catch (err) {
+      setTerminalOutput(
+        `Failed to start terminal: ${err instanceof Error ? err.message : "unknown error"}\n`
+      );
+      setTerminalConnecting(false);
+    }
+  };
+
+  const handleSendTerminalInput = async () => {
+    if (!terminalInput.trim()) return;
+    const payload = `${terminalInput}\n`;
+    const socket = terminalSocket.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(payload);
+    } else if (sessionToken && terminalSessionId) {
+      try {
+        await sendTerminalInput(sessionToken, terminalSessionId, payload);
+      } catch (err) {
+        setTerminalOutput((prev) => `${prev}\n[input failed: ${err instanceof Error ? err.message : "unknown"}]\n`);
+      }
+    }
+    setTerminalInput("");
+  };
+
+  const loadFsTree = async (pathOverride?: string) => {
+    if (!sessionToken || !selectedProjectId) {
+      setFsError("Login and select a project to browse files.");
+      return;
+    }
+    const targetPath = pathOverride ?? fsPath ?? ".";
+    setFsLoading(true);
+    setFsError(null);
+    try {
+      const tree = await fetchFileTree(sessionToken, selectedProjectId, targetPath);
+      setFsEntries(tree.entries);
+      setFsPath(tree.path || targetPath || ".");
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : "Failed to load tree");
+      setFsEntries([]);
+    } finally {
+      setFsLoading(false);
+    }
+  };
+
+  const openFile = async (path: string) => {
+    if (!sessionToken || !selectedProjectId) {
+      setFsError("Login and select a project to open files.");
+      return;
+    }
+    setFsLoading(true);
+    setFsError(null);
+    try {
+      const file = await fetchFileContent(sessionToken, selectedProjectId, path);
+      setFsContentPath(file.path);
+      setFsContent(file.content);
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : "Failed to load file");
+      setFsContent("");
+      setFsContentPath(null);
+    } finally {
+      setFsLoading(false);
+    }
+  };
+
+  const handleSelectEntry = (entry: { type: "dir" | "file"; name: string }) => {
+    const base = fsPath === "." ? "" : fsPath;
+    const nextPath = base ? `${base}/${entry.name}` : entry.name;
+    if (entry.type === "dir") {
+      loadFsTree(nextPath);
+    } else {
+      openFile(nextPath);
+    }
+  };
+
+  const goUpDirectory = () => {
+    if (fsPath === "." || fsPath === "") {
+      loadFsTree(".");
+      return;
+    }
+    const parts = fsPath.split("/").filter(Boolean);
+    parts.pop();
+    const parent = parts.length ? parts.join("/") : ".";
+    loadFsTree(parent);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (terminalSocket.current) {
+        terminalSocket.current.close();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setFsEntries([]);
+    setFsContent("");
+    setFsContentPath(null);
+    setFsPath(".");
+    if (sessionToken && selectedProjectId) {
+      loadFsTree(".");
+    }
+  }, [sessionToken, selectedProjectId]);
+
+  const tabBody = (() => {
     switch (activeTab) {
       case "Terminal":
         return (
           <div className="panel-card">
             <div className="panel-title">Persistent PTY</div>
-            <div className="panel-text">WebSocket placeholder: ws://localhost:3001/terminal/sessions/:id/stream</div>
-            <div className="panel-mono">$ tail -f logs/agent.log</div>
+            <div className="panel-text">
+              {terminalSessionId
+                ? `Session ${terminalSessionId}`
+                : "Start a session to stream output."}
+            </div>
+            <div className="login-row" style={{ gap: 8, alignItems: "center" }}>
+              <button className="tab" onClick={startTerminalSession} disabled={terminalConnecting || !sessionToken}>
+                {terminalConnecting ? "Connecting…" : terminalSessionId ? "Restart Session" : "Start Session"}
+              </button>
+              <input
+                className="filter"
+                placeholder="Type a command"
+                value={terminalInput}
+                onChange={(e) => setTerminalInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSendTerminalInput();
+                }}
+                disabled={!terminalSessionId}
+                style={{ flex: 1 }}
+              />
+              <button className="tab" onClick={handleSendTerminalInput} disabled={!terminalSessionId || !terminalInput}>
+                Send
+              </button>
+            </div>
+            <div className="panel-mono" style={{ minHeight: 240, whiteSpace: "pre-wrap" }}>
+              {terminalOutput}
+            </div>
           </div>
         );
       case "Code":
         return (
           <div className="panel-card">
             <div className="panel-title">Code Viewer</div>
-            <div className="panel-text">Monaco read-only placeholder with diff hook.</div>
-            <div className="panel-mono">/projects/nexus/workspace/apps/backend/src/routes/chat.ts</div>
+            <div className="panel-text">
+              Browse workspace files for the selected project (read-only).
+            </div>
+            <div className="login-row" style={{ gap: 8, marginBottom: 6 }}>
+              <button className="tab" onClick={goUpDirectory} disabled={fsLoading}>
+                ↑ Up
+              </button>
+              <input
+                className="filter"
+                placeholder="Path"
+                value={fsPath}
+                onChange={(e) => setFsPath(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button className="tab" onClick={() => loadFsTree(fsPath)} disabled={fsLoading}>
+                Open
+              </button>
+            </div>
+            {fsError && <div className="item-subtle" style={{ color: "#EF4444" }}>{fsError}</div>}
+            <div className="panel-text" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {fsEntries.map((entry) => (
+                <button
+                  key={entry.name}
+                  className="tab"
+                  onClick={() => handleSelectEntry(entry)}
+                  style={{ minWidth: 90 }}
+                >
+                  {entry.type === "dir" ? "📁" : "📄"} {entry.name}
+                </button>
+              ))}
+              {fsLoading && <span className="item-subtle">Loading…</span>}
+            </div>
+            {fsContentPath && (
+              <div className="panel-mono" style={{ maxHeight: 320, overflow: "auto", whiteSpace: "pre" }}>
+                <div className="item-subtle" style={{ marginBottom: 6 }}>
+                  {fsContentPath}
+                </div>
+                {fsContent}
+              </div>
+            )}
           </div>
         );
       default:
@@ -326,7 +565,7 @@ export default function Page() {
           </div>
         );
     }
-  }, [activeTab]);
+  })();
 
   return (
     <main className="page">

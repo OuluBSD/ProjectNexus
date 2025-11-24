@@ -54,3 +54,66 @@ export async function fetchChats(
 ): Promise<{ id: string; title: string; status: string; progress: number; goal?: string }[]> {
   return fetchWithAuth(token, `/api/roadmaps/${roadmapId}/chats`);
 }
+
+export async function fetchFileTree(
+  token: string,
+  projectId: string,
+  path = "."
+): Promise<{ path: string; entries: { type: "dir" | "file"; name: string }[] }> {
+  return fetchWithAuth(token, `/api/fs/tree?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`);
+}
+
+export async function fetchFileContent(
+  token: string,
+  projectId: string,
+  path: string
+): Promise<{ path: string; content: string }> {
+  return fetchWithAuth(
+    token,
+    `/api/fs/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function createTerminalSession(
+  token: string,
+  projectId?: string,
+  cwd?: string
+): Promise<{ sessionId: string }> {
+  const res = await fetch(`${API_BASE}/api/terminal/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ projectId, cwd }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create terminal session (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function sendTerminalInput(
+  token: string,
+  sessionId: string,
+  data: string
+): Promise<{ accepted: boolean }> {
+  const res = await fetch(`${API_BASE}/api/terminal/sessions/${sessionId}/input`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ data }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to send input (${res.status})`);
+  }
+  return res.json();
+}
+
+export function buildTerminalWsUrl(token: string, sessionId: string) {
+  const wsBase = API_BASE.replace(/^http/, (proto) => (proto === "https" ? "wss" : "ws"));
+  const url = `${wsBase}/api/terminal/sessions/${sessionId}/stream?token=${encodeURIComponent(token)}`;
+  return url;
+}

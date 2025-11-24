@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, test } from "node:test";
 import { authRoutes, loginThrottleState } from "../routes/auth";
 import * as authRepo from "../services/authRepository";
@@ -179,6 +179,105 @@ test("throttle unblocks after block window elapses", async () => {
       remoteAddress: ip,
     });
     assert.equal(allowed.statusCode, 200);
+  } finally {
+    loginThrottleState.attempts.clear();
+    await app.close();
+  }
+});
+
+test("login purges expired sessions before creating a db session", async () => {
+  const calls: string[] = [];
+  const db = {
+    delete: () => {
+      calls.push("delete:sessions");
+      return { where: async () => calls.push("delete.where") };
+    },
+    select: () => ({
+      from: () => ({
+        where: async () => {
+          calls.push("select.users");
+          return [];
+        },
+      }),
+    }),
+    insert: (table: unknown) => ({
+      values: (values: any) => ({
+        returning: async () => {
+          if (table === schema.users) {
+            calls.push("insert.users");
+            return [{ id: "db-user", username: values.username, passwordHash: values.passwordHash }];
+          }
+          calls.push("insert.sessions");
+          return [
+            {
+              token: "db-token",
+              userId: values.userId ?? "db-user",
+              expiresAt: new Date(Date.now() + 1000),
+              createdAt: new Date(),
+            },
+          ];
+        },
+      }),
+    }),
+    update: () => ({
+      set: () => ({ where: async () => {} }),
+    }),
+  };
+
+  const app = Fastify({ logger: false }) as FastifyInstance & { db: typeof db };
+  app.decorate("db", db);
+  await app.register(authRoutes, { prefix: "/auth" });
+  await app.ready();
+
+  try {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { username: "db-user", password: "pw" },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(calls[0], "delete:sessions");
+    assert.ok(calls.includes("insert.sessions"));
+  } finally {
+    loginThrottleState.attempts.clear();
+    await app.close();
+  }
+});
+
+test("blocked login short-circuits before hitting the database", async () => {
+  const attemptKey = loginThrottleState.loginAttemptKey("blocked-user", "127.0.0.9");
+  loginThrottleState.attempts.set(attemptKey, {
+    failures: loginThrottleState.maxFailures,
+    firstAttempt: Date.now(),
+    blockedUntil: Date.now() + loginThrottleState.blockMs,
+  });
+
+  const dbCalls: string[] = [];
+  const db = {
+    delete: () => {
+      dbCalls.push("delete");
+      return { where: async () => {} };
+    },
+    select: () => {
+      dbCalls.push("select");
+      return { from: () => ({ where: async () => [] }) };
+    },
+  };
+
+  const app = Fastify({ logger: false }) as FastifyInstance & { db: typeof db };
+  app.decorate("db", db);
+  await app.register(authRoutes, { prefix: "/auth" });
+  await app.ready();
+
+  try {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { username: "blocked-user", password: "pw" },
+      remoteAddress: "127.0.0.9",
+    });
+    assert.equal(res.statusCode, 429);
+    assert.equal(dbCalls.length, 0);
   } finally {
     loginThrottleState.attempts.clear();
     await app.close();

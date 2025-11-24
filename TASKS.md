@@ -19,6 +19,7 @@ This replaces the earlier minimal TASKS.md. The tasks here are grouped into deve
 - [x] Cover Projects/Roadmaps/Chats endpoints with DB-backed tests
 - [x] Wire Projects/Roadmaps/Chats UI to live APIs (replace mocks, handle empty DB)
 - [x] Add a small seed or creation flow so fresh installs show demo data
+- [x] Add UI flows to create projects, roadmaps, and chats from the main page
 
 ---
 

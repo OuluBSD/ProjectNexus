@@ -399,6 +399,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once on mount; downstream loaders handle updates
   }, []);
 
   const handleSelectRoadmap = async (roadmapId: string) => {
@@ -708,6 +709,7 @@ export default function Page() {
     if (sessionToken && selectedProjectId) {
       loadFsTree(".");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keep mount-time handler stable; loadFsTree depends on mutable path
   }, [sessionToken, selectedProjectId]);
 
   useEffect(() => {
@@ -768,6 +770,7 @@ export default function Page() {
       setAuditCursor(null);
       setAuditHasMore(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadAuditLog captures cursor + filters; avoid resetting on internal updates
   }, [sessionToken, selectedProjectId, auditProjectId, auditSort]);
 
   useEffect(() => {

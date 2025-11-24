@@ -122,14 +122,28 @@ export async function fetchAuditEvents(
   token: string,
   projectId?: string,
   limit = 50,
-  before?: string
+  before?: string,
+  cursor?: string,
+  filters?: { eventType?: string; userId?: string; pathContains?: string }
 ): Promise<{
-  events: { id: string; eventType: string; path?: string | null; createdAt: string; sessionId?: string | null }[];
+  events: {
+    id: string;
+    eventType: string;
+    path?: string | null;
+    createdAt: string;
+    sessionId?: string | null;
+    userId?: string | null;
+    projectId?: string | null;
+  }[];
   paging?: { hasMore: boolean; nextCursor?: string };
 }> {
   const params = new URLSearchParams();
   if (projectId) params.set("projectId", projectId);
   if (limit) params.set("limit", String(limit));
   if (before) params.set("before", before);
+  if (cursor) params.set("cursor", cursor);
+  if (filters?.eventType) params.set("eventType", filters.eventType);
+  if (filters?.userId) params.set("userId", filters.userId);
+  if (filters?.pathContains) params.set("pathContains", filters.pathContains);
   return fetchWithAuth(token, `/api/audit/events?${params.toString()}`);
 }

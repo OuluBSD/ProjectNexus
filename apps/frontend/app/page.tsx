@@ -33,7 +33,15 @@ type RoadmapItem = {
   summary?: string;
 };
 type ChatItem = { id?: string; title: string; status: Status; progress: number; note?: string; meta?: boolean };
-type AuditEvent = { id: string; eventType: string; path?: string | null; createdAt: string; sessionId?: string | null };
+type AuditEvent = {
+  id: string;
+  eventType: string;
+  path?: string | null;
+  createdAt: string;
+  sessionId?: string | null;
+  userId?: string | null;
+  projectId?: string | null;
+};
 
 const mockProjects: ProjectItem[] = [
   { name: "Atlas Compute", category: "Infra", status: "active", info: "LLM orchestration spine" },
@@ -100,10 +108,17 @@ export default function Page() {
   const [fsLoading, setFsLoading] = useState(false);
   const [fsError, setFsError] = useState<string | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditFilters, setAuditFilters] = useState<{ eventType: string; userId: string; pathContains: string }>({
+    eventType: "",
+    userId: "",
+    pathContains: "",
+  });
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  const eventTypeOptions = Array.from(new Set(auditEvents.map((e) => e.eventType))).sort();
 
   const ensureStatus = async (roadmapId: string, token: string) => {
     const existing = roadmapStatus[roadmapId];
@@ -482,9 +497,17 @@ export default function Page() {
     }
   }, [sessionToken, selectedProjectId]);
 
-  const loadAuditLog = async (projectId?: string, options?: { reset?: boolean }) => {
+  const loadAuditLog = async (
+    projectId?: string,
+    options?: { reset?: boolean; filtersOverride?: Partial<typeof auditFilters> }
+  ) => {
     if (!sessionToken) return;
-    const before = options?.reset ? undefined : auditCursor ?? undefined;
+    const cursor = options?.reset ? undefined : auditCursor ?? undefined;
+    const filters = {
+      eventType: (options?.filtersOverride?.eventType ?? auditFilters.eventType) || undefined,
+      userId: (options?.filtersOverride?.userId ?? auditFilters.userId) || undefined,
+      pathContains: (options?.filtersOverride?.pathContains ?? auditFilters.pathContains) || undefined,
+    };
     if (options?.reset) {
       setAuditEvents([]);
       setAuditCursor(null);
@@ -492,7 +515,7 @@ export default function Page() {
     }
     setAuditLoading(true);
     try {
-      const { events, paging } = await fetchAuditEvents(sessionToken, projectId, 50, before);
+      const { events, paging } = await fetchAuditEvents(sessionToken, projectId, 50, undefined, cursor, filters);
       setAuditEvents((prev) => (options?.reset ? events : [...prev, ...events]));
       setAuditCursor(paging?.nextCursor ?? null);
       setAuditHasMore(Boolean(paging?.hasMore));
@@ -738,6 +761,51 @@ export default function Page() {
       <div className="panel-card" style={{ marginTop: 12 }}>
         <div className="panel-title">Recent Activity</div>
         <div className="panel-text">Latest file/terminal actions (backend DB required).</div>
+        <div className="login-row" style={{ gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <select
+            className="filter"
+            value={auditFilters.eventType}
+            onChange={(e) => setAuditFilters((prev) => ({ ...prev, eventType: e.target.value }))}
+          >
+            <option value="">Any event</option>
+            {eventTypeOptions.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+          <input
+            className="filter"
+            placeholder="User ID"
+            value={auditFilters.userId}
+            onChange={(e) => setAuditFilters((prev) => ({ ...prev, userId: e.target.value }))}
+          />
+          <input
+            className="filter"
+            placeholder="Path contains"
+            value={auditFilters.pathContains}
+            onChange={(e) => setAuditFilters((prev) => ({ ...prev, pathContains: e.target.value }))}
+            style={{ flex: 1, minWidth: 160 }}
+          />
+          <button
+            className="tab"
+            onClick={() => loadAuditLog(selectedProjectId ?? undefined, { reset: true })}
+            disabled={auditLoading}
+          >
+            Apply filters
+          </button>
+          <button
+            className="ghost"
+            onClick={() => {
+              const cleared = { eventType: "", userId: "", pathContains: "" };
+              setAuditFilters(cleared);
+              loadAuditLog(selectedProjectId ?? undefined, { reset: true, filtersOverride: cleared });
+            }}
+            disabled={auditLoading}
+          >
+            Clear
+          </button>
+        </div>
         <div className="login-row" style={{ gap: 8, marginBottom: 8 }}>
           <button
             className="tab"
@@ -766,6 +834,9 @@ export default function Page() {
                 </span>
               </div>
               <div className="item-sub">{event.path ?? event.sessionId ?? "N/A"}</div>
+              <div className="item-subtle">
+                user {event.userId ?? "—"} · session {event.sessionId ?? "—"} · project {event.projectId ?? "—"}
+              </div>
             </div>
           ))}
           {auditLoading && <div className="item-subtle">Loading…</div>}

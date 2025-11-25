@@ -138,6 +138,8 @@ Implement DB models + TypeScript interfaces:
 - [x] Quick filter (title/tags)
 - [x] Subtle summary info
 - [x] Right-click menu (edit, add chat, open meta-chat)
+- [x] Surface a roadmap-focused context/settings panel for those context menu flows
+- [x] Reset roadmap/project edit state automatically when selections change
 - [x] Visual separation for special entries
 - [x] API integration for real-time progress updates
 - [x] Refresh roadmap summaries when backend meta/chat status changes

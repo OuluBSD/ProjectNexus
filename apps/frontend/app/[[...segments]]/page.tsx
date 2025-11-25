@@ -141,6 +141,21 @@ type ContextPanel =
       kind: "project-templates";
       projectId: string;
       projectName: string;
+    }
+  | {
+      kind: "roadmap-details";
+      roadmapId: string;
+      roadmapTitle: string;
+      loading: boolean;
+      notice?: string;
+      error?: string;
+      tags?: string[];
+      status?: Status;
+      progress?: number;
+      summary?: string | null;
+      metaStatus?: Status;
+      metaProgress?: number;
+      metaSummary?: string | null;
     };
 
 const contextActionConfig: Record<ContextTarget, { key: string; label: string }[]> = {
@@ -1109,6 +1124,10 @@ export default function Page() {
 
   const handleSelectRoadmap = useCallback(
     async (roadmapId: string) => {
+      if (selectedRoadmapId && selectedRoadmapId !== roadmapId) {
+        cancelRoadmapEdit();
+        setContextPanel(null);
+      }
       setSelectedRoadmapId(roadmapId);
       setSelectedChatId(null);
       setMessages([]);
@@ -1126,10 +1145,24 @@ export default function Page() {
         );
       }
     },
-    [loadChatsForRoadmap, roadmapStatus, selectedProjectId, sessionToken, syncUrlSelection]
+    [
+      cancelRoadmapEdit,
+      loadChatsForRoadmap,
+      roadmapStatus,
+      selectedProjectId,
+      selectedRoadmapId,
+      sessionToken,
+      setContextPanel,
+      syncUrlSelection,
+    ]
   );
 
   const handleSelectProject = async (projectId: string) => {
+    if (selectedProjectId && selectedProjectId !== projectId) {
+      cancelProjectEdit();
+    }
+    cancelRoadmapEdit();
+    setContextPanel(null);
     setSelectedProjectId(projectId);
     setSelectedChatId(null);
     setMessages([]);
@@ -1202,6 +1235,52 @@ export default function Page() {
     [setContextMenu]
   );
 
+  const openRoadmapContextPanel = useCallback(
+    async (roadmap: RoadmapItem, notice?: string) => {
+      const basePanel: ContextPanel = {
+        kind: "roadmap-details",
+        roadmapId: roadmap.id ?? roadmap.title,
+        roadmapTitle: roadmap.title,
+        loading: true,
+        notice,
+      };
+      setContextPanel(basePanel);
+      if (!roadmap.id) {
+        setContextPanel({ ...basePanel, loading: false, error: "Roadmap identifier unavailable." });
+        return;
+      }
+      if (!sessionToken) {
+        setContextPanel({ ...basePanel, loading: false, error: "Login required." });
+        return;
+      }
+      try {
+        const statusInfo = await ensureStatus(roadmap.id, sessionToken, { forceRefresh: true });
+        const latestStatus = statusInfo ?? roadmapStatus[roadmap.id];
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          status: latestStatus?.status ?? roadmap.status,
+          progress: latestStatus?.progress ?? roadmap.progress,
+          summary: latestStatus?.summary ?? roadmap.summary ?? null,
+          tags: roadmap.tags,
+          metaStatus: metaChats[roadmap.id]?.status,
+          metaProgress: metaChats[roadmap.id]?.progress,
+          metaSummary: metaChats[roadmap.id]?.summary ?? null,
+        });
+      } catch (err) {
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : "Unable to load roadmap status and meta chat context.",
+        });
+      }
+    },
+    [ensureStatus, metaChats, roadmapStatus, sessionToken]
+  );
+
   const handleContextAction = useCallback(
     async (actionKey: string) => {
       if (!contextMenu) return;
@@ -1230,6 +1309,7 @@ export default function Page() {
         switch (actionKey) {
           case "edit":
             startRoadmapEdit(roadmap);
+            void openRoadmapContextPanel(roadmap, `Editing ${roadmap.title}.`);
             nextMessage = `Editing ${roadmap.title}.`;
             break;
           case "add-chat":
@@ -1237,6 +1317,7 @@ export default function Page() {
               await handleSelectRoadmap(roadmap.id);
               setActiveTab("Chat");
               setChatDraft({ title: "", goal: "" });
+              void openRoadmapContextPanel(roadmap, `Chat flow ready for ${roadmap.title}.`);
               nextMessage = `Ready to add a chat on ${roadmap.title}.`;
             } else {
               nextMessage = "Roadmap identifier missing.";
@@ -1250,6 +1331,7 @@ export default function Page() {
               setMessages([]);
               setMessagesError("Meta-chat messages are not shown yet.");
               syncUrlSelection(selectedProjectId, roadmap.id, metaChatId);
+              void openRoadmapContextPanel(roadmap, `Meta chat selected for ${roadmap.title}.`);
               nextMessage = `Meta chat selected for ${roadmap.title}.`;
             } else {
               nextMessage = "Roadmap identifier missing.";
@@ -1275,6 +1357,7 @@ export default function Page() {
       setStatusMessage,
       startProjectEdit,
       startRoadmapEdit,
+      openRoadmapContextPanel,
       syncUrlSelection,
     ]
   );
@@ -2636,6 +2719,17 @@ export default function Page() {
   const editingRoadmapName =
     editingRoadmapId &&
     (roadmaps.find((roadmap) => roadmap.id === editingRoadmapId)?.title ?? editingRoadmapId);
+  const contextPanelTitle = contextPanel
+    ? contextPanel.kind === "project-settings"
+      ? "Project settings"
+      : contextPanel.kind === "project-templates"
+        ? "Templates"
+        : "Roadmap context"
+    : "";
+  const contextPanelSubject =
+    contextPanel?.kind === "roadmap-details"
+      ? contextPanel.roadmapTitle
+      : contextPanel?.projectName;
 
   return (
     <main className="page">
@@ -3203,10 +3297,8 @@ export default function Page() {
         <div className="context-panel">
           <div className="context-panel-header">
             <div>
-              <div className="context-panel-title">
-                {contextPanel.kind === "project-settings" ? "Project settings" : "Templates"}
-              </div>
-              <div className="item-subtle">{contextPanel.projectName}</div>
+              <div className="context-panel-title">{contextPanelTitle}</div>
+              <div className="item-subtle">{contextPanelSubject}</div>
             </div>
             <button className="ghost" onClick={() => setContextPanel(null)}>
               Close
@@ -3259,7 +3351,7 @@ export default function Page() {
                   <div className="item-subtle">No project details available.</div>
                 )}
               </>
-            ) : (
+            ) : contextPanel.kind === "project-templates" ? (
               <>
                 {templates.length > 0 ? (
                   <div className="context-panel-roadmaps">
@@ -3272,6 +3364,64 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="item-subtle">No templates loaded yet.</div>
+                )}
+              </>
+            ) : (
+              <>
+                {contextPanel.loading ? (
+                  <div className="item-subtle">Loading roadmap context…</div>
+                ) : contextPanel.error ? (
+                  <div className="item-subtle" style={{ color: "#EF4444" }}>
+                    {contextPanel.error}
+                  </div>
+                ) : (
+                  <div className="context-panel-section">
+                    {contextPanel.notice && (
+                      <div className="item-subtle" style={{ color: "#10B981" }}>
+                        {contextPanel.notice}
+                      </div>
+                    )}
+                    <div className="context-panel-list-item">
+                      <span className="context-panel-label">Status</span>
+                      <span className="item-subtle">
+                        {formatStatusLabel(contextPanel.status ?? "active")} ·{" "}
+                        {progressPercent(contextPanel.progress ?? 0)}%
+                      </span>
+                    </div>
+                    <div className="context-panel-list-item">
+                      <span className="context-panel-label">Summary</span>
+                      <span className="item-subtle">
+                        {contextPanel.summary ?? "Summary not available yet."}
+                      </span>
+                    </div>
+                    {contextPanel.tags && contextPanel.tags.length > 0 && (
+                      <div className="context-panel-list-item">
+                        <span className="context-panel-label">Tags</span>
+                        <div className="roadmap-tags">
+                          {contextPanel.tags.map((tag) => (
+                            <span className="item-pill" key={`${contextPanel.roadmapId}-${tag}`}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(contextPanel.metaStatus || contextPanel.metaSummary) && (
+                      <div className="context-panel-list-item">
+                        <span className="context-panel-label">Meta chat</span>
+                        <span className="item-subtle">
+                          {contextPanel.metaSummary ?? "Meta summary unavailable."}
+                        </span>
+                        <span className="item-subtle">
+                          {contextPanel.metaStatus
+                            ? `${progressPercent(contextPanel.metaProgress ?? 0)}% · ${formatStatusLabel(
+                                contextPanel.metaStatus
+                              )}`
+                            : ""}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </>
             )}

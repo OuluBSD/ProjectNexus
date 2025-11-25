@@ -9,6 +9,34 @@ export type ProjectPayload = {
   theme?: Record<string, unknown> | null;
 };
 
+export type RoadmapSummary = {
+  id: string;
+  title: string;
+  status: string;
+  progress: number;
+  tags?: string[];
+};
+
+export type ProjectDetailsResponse = {
+  project: ProjectPayload;
+  roadmapLists: RoadmapSummary[];
+};
+
+export type ProjectUpdatePayload = {
+  name?: string;
+  category?: string;
+  description?: string;
+  status?: string;
+  theme?: Record<string, unknown> | null;
+};
+
+export type RoadmapUpdatePayload = {
+  title?: string;
+  tags?: string[];
+  status?: string;
+  progress?: number;
+};
+
 type LoginResponse = { token: string; user: { id: string; username: string } };
 
 async function fetchWithAuth<T>(token: string, path: string): Promise<T> {
@@ -65,6 +93,32 @@ export async function createProject(
   return res.json();
 }
 
+export async function updateProject(
+  token: string,
+  projectId: string,
+  payload: ProjectUpdatePayload
+): Promise<ProjectPayload> {
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update project (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchProjectDetails(
+  token: string,
+  projectId: string
+): Promise<ProjectDetailsResponse> {
+  return fetchWithAuth(token, `/api/projects/${projectId}/details`);
+}
+
 export async function fetchRoadmaps(
   token: string,
   projectId: string
@@ -96,6 +150,25 @@ export async function createRoadmap(
   });
   if (!res.ok) {
     throw new Error(`Failed to create roadmap (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updateRoadmap(
+  token: string,
+  roadmapId: string,
+  payload: RoadmapUpdatePayload
+): Promise<{ id: string; title: string; tags: string[]; status: string; progress: number }> {
+  const res = await fetch(`${API_BASE}/api/roadmaps/${roadmapId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update roadmap (${res.status})`);
   }
   return res.json();
 }

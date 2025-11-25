@@ -24,7 +24,11 @@ import {
   updateChatStatus,
   fetchTemplates,
   fetchMetaChat,
+  fetchProjectDetails,
   ProjectPayload,
+  ProjectDetailsResponse,
+  updateProject,
+  updateRoadmap,
 } from "../../lib/api";
 
 type Status =
@@ -106,13 +110,38 @@ type MetaChat = {
   summary?: string;
 };
 type ContextTarget = "project" | "roadmap";
-type ContextMenuState = {
-  type: ContextTarget;
-  id: string;
-  title: string;
-  x: number;
-  y: number;
-};
+type ContextMenuState =
+  | {
+      type: "project";
+      id: string;
+      title: string;
+      x: number;
+      y: number;
+      project: ProjectItem;
+    }
+  | {
+      type: "roadmap";
+      id: string;
+      title: string;
+      x: number;
+      y: number;
+      roadmap: RoadmapItem;
+    };
+
+type ContextPanel =
+  | {
+      kind: "project-settings";
+      projectId: string;
+      projectName: string;
+      loading: boolean;
+      error?: string;
+      details?: ProjectDetailsResponse;
+    }
+  | {
+      kind: "project-templates";
+      projectId: string;
+      projectName: string;
+    };
 
 const contextActionConfig: Record<ContextTarget, { key: string; label: string }[]> = {
   project: [
@@ -491,6 +520,11 @@ export default function Page() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [creatingRoadmap, setCreatingRoadmap] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [updatingProject, setUpdatingProject] = useState(false);
+  const [editingRoadmapId, setEditingRoadmapId] = useState<string | null>(null);
+  const [updatingRoadmap, setUpdatingRoadmap] = useState(false);
+  const [contextPanel, setContextPanel] = useState<ContextPanel | null>(null);
   const normalizedProjectFilter = projectFilter.trim();
   const filteredProjectQuery = normalizedProjectFilter.toLowerCase();
   const filteredProjects = useMemo(() => {
@@ -616,6 +650,27 @@ export default function Page() {
     };
   }, [contextMenu]);
 
+  useEffect(() => {
+    if (!sessionToken || !selectedRoadmapId) return;
+    let cancelled = false;
+    const refreshStatus = async () => {
+      try {
+        await ensureStatus(selectedRoadmapId, sessionToken, { forceRefresh: true });
+      } catch {
+        // tolerate polling failures
+      }
+    };
+    refreshStatus();
+    const interval = setInterval(() => {
+      if (cancelled) return;
+      refreshStatus();
+    }, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [ensureStatus, selectedRoadmapId, sessionToken]);
+
   const eventTypeOptions = Array.from(new Set(auditEvents.map((e) => e.eventType))).sort();
 
   const readStoredChat = useCallback((roadmapId: string | null) => {
@@ -661,36 +716,39 @@ export default function Page() {
     }
   }, [buildHrefFromSelection, selectedChatId, selectedProjectId, selectedRoadmapId]);
 
-  const ensureStatus = useCallback(async (roadmapId: string, token: string) => {
-    const existing = roadmapStatusRef.current[roadmapId];
-    if (existing) return existing;
-    try {
-      const meta = await fetchMetaChat(token, roadmapId);
-      const mapped = {
-        status: (meta.status as Status) ?? "active",
-        progress: meta.progress ?? 0,
-        summary: meta.summary,
-      };
-      setMetaChats((prev) => ({ ...prev, [roadmapId]: { ...meta, ...mapped } }));
-      roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
-      setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
-      return mapped;
-    } catch {
+  const ensureStatus = useCallback(
+    async (roadmapId: string, token: string, options?: { forceRefresh?: boolean }) => {
+      const existing = roadmapStatusRef.current[roadmapId];
+      if (existing && !options?.forceRefresh) return existing;
       try {
-        const remote = await fetchRoadmapStatus(token, roadmapId);
+        const meta = await fetchMetaChat(token, roadmapId);
         const mapped = {
-          status: (remote.status as Status) ?? "active",
-          progress: remote.progress ?? 0,
-          summary: remote.summary,
+          status: (meta.status as Status) ?? "active",
+          progress: meta.progress ?? 0,
+          summary: meta.summary,
         };
+        setMetaChats((prev) => ({ ...prev, [roadmapId]: { ...meta, ...mapped } }));
         roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
         setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
         return mapped;
       } catch {
-        return null;
+        try {
+          const remote = await fetchRoadmapStatus(token, roadmapId);
+          const mapped = {
+            status: (remote.status as Status) ?? "active",
+            progress: remote.progress ?? 0,
+            summary: remote.summary,
+          };
+          roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
+          setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
+          return mapped;
+        } catch {
+          return null;
+        }
       }
-    }
-  }, []);
+    },
+    []
+  );
 
   const loadMetaChat = useCallback(async (roadmapId: string, token: string) => {
     try {
@@ -1049,24 +1107,27 @@ export default function Page() {
     };
   }, [clearWorkspaceState, hydrateWorkspace]);
 
-  const handleSelectRoadmap = async (roadmapId: string) => {
-    setSelectedRoadmapId(roadmapId);
-    setSelectedChatId(null);
-    setMessages([]);
-    setMessageDraft("");
-    setMessagesError(null);
-    syncUrlSelection(selectedProjectId, roadmapId, null);
-    if (typeof window !== "undefined") localStorage.setItem(ROADMAP_STORAGE_KEY, roadmapId);
-    if (sessionToken) {
-      await loadChatsForRoadmap(
-        roadmapId,
-        sessionToken,
-        roadmapStatus[roadmapId],
-        null,
-        selectedProjectId
-      );
-    }
-  };
+  const handleSelectRoadmap = useCallback(
+    async (roadmapId: string) => {
+      setSelectedRoadmapId(roadmapId);
+      setSelectedChatId(null);
+      setMessages([]);
+      setMessageDraft("");
+      setMessagesError(null);
+      syncUrlSelection(selectedProjectId, roadmapId, null);
+      if (typeof window !== "undefined") localStorage.setItem(ROADMAP_STORAGE_KEY, roadmapId);
+      if (sessionToken) {
+        await loadChatsForRoadmap(
+          roadmapId,
+          sessionToken,
+          roadmapStatus[roadmapId],
+          null,
+          selectedProjectId
+        );
+      }
+    },
+    [loadChatsForRoadmap, roadmapStatus, selectedProjectId, sessionToken, syncUrlSelection]
+  );
 
   const handleSelectProject = async (projectId: string) => {
     setSelectedProjectId(projectId);
@@ -1119,6 +1180,7 @@ export default function Page() {
         title: project.name,
         x: event.clientX,
         y: event.clientY,
+        project,
       });
     },
     [setContextMenu]
@@ -1134,22 +1196,87 @@ export default function Page() {
         title: roadmap.title,
         x: event.clientX,
         y: event.clientY,
+        roadmap,
       });
     },
     [setContextMenu]
   );
 
   const handleContextAction = useCallback(
-    (actionKey: string) => {
+    async (actionKey: string) => {
       if (!contextMenu) return;
       const actions = contextActionConfig[contextMenu.type];
       const action = actions.find((item) => item.key === actionKey);
-      setStatusMessage(
-        `${action?.label ?? actionKey} requested for ${contextMenu.title || contextMenu.id}.`
-      );
+      let nextMessage = `${action?.label ?? actionKey} requested for ${contextMenu.title || contextMenu.id}.`;
+      if (contextMenu.type === "project") {
+        const project = contextMenu.project;
+        switch (actionKey) {
+          case "edit":
+            startProjectEdit(project);
+            nextMessage = `Editing ${project.name}.`;
+            break;
+          case "settings":
+            await openProjectSettingsPanel(project);
+            nextMessage = `Showing settings for ${project.name}.`;
+            break;
+          case "templates":
+            openProjectTemplatesPanel(project);
+            nextMessage = `Showing templates for ${project.name}.`;
+            break;
+        }
+      }
+      if (contextMenu.type === "roadmap") {
+        const roadmap = contextMenu.roadmap;
+        switch (actionKey) {
+          case "edit":
+            startRoadmapEdit(roadmap);
+            nextMessage = `Editing ${roadmap.title}.`;
+            break;
+          case "add-chat":
+            if (roadmap.id) {
+              await handleSelectRoadmap(roadmap.id);
+              setActiveTab("Chat");
+              setChatDraft({ title: "", goal: "" });
+              nextMessage = `Ready to add a chat on ${roadmap.title}.`;
+            } else {
+              nextMessage = "Roadmap identifier missing.";
+            }
+            break;
+          case "meta-chat":
+            if (roadmap.id) {
+              await handleSelectRoadmap(roadmap.id);
+              const metaChatId = `meta-${roadmap.id}`;
+              setSelectedChatId(metaChatId);
+              setMessages([]);
+              setMessagesError("Meta-chat messages are not shown yet.");
+              syncUrlSelection(selectedProjectId, roadmap.id, metaChatId);
+              nextMessage = `Meta chat selected for ${roadmap.title}.`;
+            } else {
+              nextMessage = "Roadmap identifier missing.";
+            }
+            break;
+        }
+      }
+      setStatusMessage(nextMessage);
       setContextMenu(null);
     },
-    [contextMenu, setStatusMessage]
+    [
+      contextMenu,
+      handleSelectRoadmap,
+      openProjectSettingsPanel,
+      openProjectTemplatesPanel,
+      selectedProjectId,
+      setActiveTab,
+      setChatDraft,
+      setContextMenu,
+      setMessages,
+      setMessagesError,
+      setSelectedChatId,
+      setStatusMessage,
+      startProjectEdit,
+      startRoadmapEdit,
+      syncUrlSelection,
+    ]
   );
 
   const handleLoginSubmit = async () => {
@@ -1240,6 +1367,159 @@ export default function Page() {
       setCreatingProject(false);
     }
   }, [loadRoadmapsForProject, projectDraft, projectThemePreset, sessionToken]);
+
+  const cancelProjectEdit = useCallback(() => {
+    setEditingProjectId(null);
+    setProjectDraft({ name: "", category: "", description: "" });
+    setProjectThemePreset("default");
+  }, []);
+
+  const startProjectEdit = useCallback((project: ProjectItem) => {
+    setEditingProjectId(project.id ?? null);
+    setProjectDraft({
+      name: project.name,
+      category: project.category ?? "",
+      description: project.info ?? "",
+    });
+    setProjectThemePreset("default");
+    setStatusMessage(`Editing project ${project.name}.`);
+  }, []);
+
+  const handleUpdateProject = useCallback(async () => {
+    if (!sessionToken) {
+      setStatusMessage("Login to update projects.");
+      return;
+    }
+    if (!editingProjectId) {
+      setStatusMessage("Select a project to edit.");
+      return;
+    }
+    const name = projectDraft.name.trim();
+    if (!name) {
+      setStatusMessage("Project name is required.");
+      return;
+    }
+    setUpdatingProject(true);
+    try {
+      const themeOverride = projectThemePresets[projectThemePreset];
+      const payload = {
+        name,
+        category: projectDraft.category.trim() || undefined,
+        description: projectDraft.description.trim() || undefined,
+        theme: Object.keys(themeOverride).length ? themeOverride : undefined,
+      };
+      const updated = await updateProject(sessionToken, editingProjectId, payload);
+      const mapped = mapProjectPayload(updated);
+      setProjects((prev) => prev.map((project) => (project.id === mapped.id ? mapped : project)));
+      setStatusMessage("Project changes saved.");
+      cancelProjectEdit();
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Failed to update project.");
+    } finally {
+      setUpdatingProject(false);
+    }
+  }, [
+    cancelProjectEdit,
+    editingProjectId,
+    projectDraft.category,
+    projectDraft.description,
+    projectDraft.name,
+    projectThemePreset,
+    sessionToken,
+  ]);
+
+  const cancelRoadmapEdit = useCallback(() => {
+    setEditingRoadmapId(null);
+    setRoadmapDraft({ title: "", tagsInput: "" });
+  }, []);
+
+  const startRoadmapEdit = useCallback((roadmap: RoadmapItem) => {
+    setEditingRoadmapId(roadmap.id ?? null);
+    setRoadmapDraft({ title: roadmap.title, tagsInput: roadmap.tags.join(", ") });
+    setStatusMessage(`Editing roadmap ${roadmap.title}.`);
+  }, []);
+
+  const handleUpdateRoadmap = useCallback(async () => {
+    if (!sessionToken || !editingRoadmapId) {
+      setStatusMessage("Select a roadmap to edit.");
+      return;
+    }
+    const title = roadmapDraft.title.trim();
+    if (!title) {
+      setStatusMessage("Roadmap title is required.");
+      return;
+    }
+    setUpdatingRoadmap(true);
+    try {
+      const tags = roadmapDraft.tagsInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+      const updated = await updateRoadmap(sessionToken, editingRoadmapId, { title, tags });
+      setRoadmaps((prev) =>
+        prev.map((roadmap) =>
+          roadmap.id === updated.id
+            ? { ...roadmap, title: updated.title, tags: updated.tags ?? [] }
+            : roadmap
+        )
+      );
+      setStatusMessage("Roadmap changes saved.");
+      cancelRoadmapEdit();
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Failed to update roadmap.");
+    } finally {
+      setUpdatingRoadmap(false);
+    }
+  }, [
+    cancelRoadmapEdit,
+    editingRoadmapId,
+    roadmapDraft.tagsInput,
+    roadmapDraft.title,
+    sessionToken,
+  ]);
+
+  const openProjectSettingsPanel = useCallback(
+    async (project: ProjectItem) => {
+      const basePanel = {
+        kind: "project-settings" as const,
+        projectId: project.id ?? project.name,
+        projectName: project.name,
+        loading: true,
+      };
+      setContextPanel(basePanel);
+      if (!project.id) {
+        setContextPanel({ ...basePanel, loading: false, error: "Project identifier unavailable." });
+        return;
+      }
+      if (!sessionToken) {
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          error: "Login required to view project settings.",
+        });
+        return;
+      }
+      try {
+        const details = await fetchProjectDetails(sessionToken, project.id);
+        setContextPanel({ ...basePanel, loading: false, details });
+      } catch (err) {
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          error: err instanceof Error ? err.message : "Unable to load project settings.",
+        });
+      }
+    },
+    [sessionToken]
+  );
+
+  const openProjectTemplatesPanel = useCallback((project: ProjectItem) => {
+    setContextPanel({
+      kind: "project-templates",
+      projectId: project.id ?? project.name,
+      projectName: project.name,
+    });
+  }, []);
 
   const handleCreateRoadmap = useCallback(async () => {
     if (!sessionToken || !selectedProjectId) {
@@ -1400,6 +1680,7 @@ export default function Page() {
         await loadMessagesForChat(selectedChatId, sessionToken);
         if (selectedRoadmapId && sessionToken) {
           await loadMetaChat(selectedRoadmapId, sessionToken);
+          await ensureStatus(selectedRoadmapId, sessionToken, { forceRefresh: true });
         }
       } catch (err) {
         setChatUpdateMessage(err instanceof Error ? err.message : "Failed to update status");
@@ -1409,6 +1690,7 @@ export default function Page() {
       chatFocusDraft,
       chatProgressDraft,
       chatStatusDraft,
+      ensureStatus,
       loadMessagesForChat,
       loadMetaChat,
       selectedChatId,
@@ -2348,6 +2630,13 @@ export default function Page() {
     }
   })();
 
+  const editingProjectName =
+    editingProjectId &&
+    (projects.find((project) => project.id === editingProjectId)?.name ?? editingProjectId);
+  const editingRoadmapName =
+    editingRoadmapId &&
+    (roadmaps.find((roadmap) => roadmap.id === editingRoadmapId)?.title ?? editingRoadmapId);
+
   return (
     <main className="page">
       <div className="panel-card" style={{ marginBottom: 12 }}>
@@ -2496,13 +2785,31 @@ export default function Page() {
             </select>
             <button
               className="tab"
-              onClick={handleCreateProject}
-              disabled={creatingProject || !sessionToken}
+              onClick={editingProjectId ? handleUpdateProject : handleCreateProject}
+              disabled={
+                editingProjectId
+                  ? updatingProject || !sessionToken
+                  : creatingProject || !sessionToken
+              }
               title={sessionToken ? "" : "Login required"}
             >
-              {creatingProject ? "Creating…" : "+ Project"}
+              {editingProjectId
+                ? updatingProject
+                  ? "Saving…"
+                  : "Save changes"
+                : creatingProject
+                  ? "Creating…"
+                  : "+ Project"}
             </button>
+            {editingProjectId && (
+              <button className="ghost" onClick={cancelProjectEdit} disabled={updatingProject}>
+                Cancel edit
+              </button>
+            )}
           </div>
+          {editingProjectName && (
+            <div className="item-subtle editing-hint">Editing project: {editingProjectName}</div>
+          )}
           {loading && <div className="item-subtle">Loading projects…</div>}
           {error && <div className="item-subtle">{error}</div>}
           <div className="list">
@@ -2597,13 +2904,31 @@ export default function Page() {
             />
             <button
               className="tab"
-              onClick={handleCreateRoadmap}
-              disabled={creatingRoadmap || !sessionToken || !selectedProjectId}
+              onClick={editingRoadmapId ? handleUpdateRoadmap : handleCreateRoadmap}
+              disabled={
+                editingRoadmapId
+                  ? updatingRoadmap || !sessionToken || !selectedProjectId
+                  : creatingRoadmap || !sessionToken || !selectedProjectId
+              }
               title={selectedProjectId ? "" : "Select a project first"}
             >
-              {creatingRoadmap ? "Creating…" : "+ Roadmap"}
+              {editingRoadmapId
+                ? updatingRoadmap
+                  ? "Saving…"
+                  : "Save changes"
+                : creatingRoadmap
+                  ? "Creating…"
+                  : "+ Roadmap"}
             </button>
+            {editingRoadmapId && (
+              <button className="ghost" onClick={cancelRoadmapEdit} disabled={updatingRoadmap}>
+                Cancel edit
+              </button>
+            )}
           </div>
+          {editingRoadmapName && (
+            <div className="item-subtle editing-hint">Editing roadmap: {editingRoadmapName}</div>
+          )}
           <div className="list">
             {selectedProjectId && filteredRoadmaps.length === 0 && (
               <div className="item-subtle">
@@ -2874,6 +3199,85 @@ export default function Page() {
           {auditLoading && <div className="item-subtle">Loading…</div>}
         </div>
       </div>
+      {contextPanel && (
+        <div className="context-panel">
+          <div className="context-panel-header">
+            <div>
+              <div className="context-panel-title">
+                {contextPanel.kind === "project-settings" ? "Project settings" : "Templates"}
+              </div>
+              <div className="item-subtle">{contextPanel.projectName}</div>
+            </div>
+            <button className="ghost" onClick={() => setContextPanel(null)}>
+              Close
+            </button>
+          </div>
+          <div className="context-panel-content">
+            {contextPanel.kind === "project-settings" ? (
+              <>
+                {contextPanel.loading ? (
+                  <div className="item-subtle">Loading settings…</div>
+                ) : contextPanel.error ? (
+                  <div className="item-subtle" style={{ color: "#EF4444" }}>
+                    {contextPanel.error}
+                  </div>
+                ) : contextPanel.details ? (
+                  <div className="context-panel-section">
+                    <div className="context-panel-list-item">
+                      <span className="context-panel-label">Status</span>
+                      <span className="item-subtle">
+                        {formatStatusLabel(contextPanel.details.project.status)}
+                      </span>
+                    </div>
+                    <div className="context-panel-list-item">
+                      <span className="context-panel-label">Description</span>
+                      <span className="item-subtle">
+                        {contextPanel.details.project.description ?? "No description"}
+                      </span>
+                    </div>
+                    <div className="context-panel-list-item">
+                      <span className="context-panel-label">Roadmaps</span>
+                      <span className="item-subtle">
+                        {contextPanel.details.roadmapLists.length} configured
+                      </span>
+                    </div>
+                    {contextPanel.details.roadmapLists.length > 0 && (
+                      <div className="context-panel-roadmaps">
+                        {contextPanel.details.roadmapLists.slice(0, 3).map((roadmap) => (
+                          <div className="context-panel-list-item" key={roadmap.id}>
+                            <span>{roadmap.title}</span>
+                            <span className="item-subtle">
+                              {progressPercent(roadmap.progress)}% ·{" "}
+                              {formatStatusLabel(roadmap.status)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="item-subtle">No project details available.</div>
+                )}
+              </>
+            ) : (
+              <>
+                {templates.length > 0 ? (
+                  <div className="context-panel-roadmaps">
+                    {templates.slice(0, 4).map((template) => (
+                      <div className="context-panel-list-item" key={template.id}>
+                        <span>{template.title}</span>
+                        <span className="item-subtle">{template.goal ?? "No goal defined."}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="item-subtle">No templates loaded yet.</div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {fsToast && (
         <div className={`toast ${fsToast.tone === "error" ? "toast-error" : "toast-success"}`}>
           <span style={{ fontWeight: 700 }}>{fsToast.message}</span>

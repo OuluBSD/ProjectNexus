@@ -23,4 +23,7 @@ test("merge prompt honors trimmed/case-tolerant target submissions", async ({ pa
   await dialog.accept("  TaRgEt ChAt  ");
 
   await expect.poll(() => capturedMergeTarget ?? null).toBe("TaRgEt ChAt");
+  const chatItems = page.locator(".chats-column .list .item:not(.meta)");
+  await expect(chatItems).toHaveCount(1);
+  await expect(chatItems.first().locator(".item-title")).toHaveText("Target Chat");
 });

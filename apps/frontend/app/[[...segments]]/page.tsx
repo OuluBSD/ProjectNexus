@@ -24,6 +24,7 @@ import {
   updateChatStatus,
   fetchTemplates,
   fetchMetaChat,
+  ProjectPayload,
 } from "../lib/api";
 
 type Status =
@@ -42,7 +43,14 @@ const PROJECT_STORAGE_KEY = "agentmgr:selectedProject";
 const ROADMAP_STORAGE_KEY = "agentmgr:selectedRoadmap";
 const CHAT_STORAGE_KEY = "agentmgr:selectedChat";
 
-type ProjectItem = { id?: string; name: string; category: string; status: Status; info: string };
+type ProjectItem = {
+  id?: string;
+  name: string;
+  category: string;
+  status: Status;
+  info: string;
+  theme?: ThemeOverride;
+};
 type RoadmapItem = {
   id?: string;
   title: string;
@@ -97,6 +105,178 @@ type MetaChat = {
   progress: number;
   summary?: string;
 };
+const THEME_VARIABLES = {
+  bg: "--bg",
+  panel: "--panel",
+  card: "--card",
+  accent: "--accent",
+  text: "--text",
+  muted: "--muted",
+  border: "--border",
+  ghost: "--ghost",
+} as const;
+
+type ThemeToken = keyof typeof THEME_VARIABLES;
+type ThemePalette = Record<ThemeToken, string> & { colorScheme: "dark" | "light" };
+type ThemeOverride = Partial<Record<ThemeToken, string>>;
+const THEME_TOKENS = Object.keys(THEME_VARIABLES) as ThemeToken[];
+
+const baseThemes: Record<"dark" | "light", ThemePalette> = {
+  dark: {
+    colorScheme: "dark",
+    bg: "#0f172a",
+    panel: "#111827",
+    card: "#1f2937",
+    accent: "#0ea5e9",
+    text: "#e5e7eb",
+    muted: "#94a3b8",
+    border: "#1f2937",
+    ghost: "#1e293b",
+  },
+  light: {
+    colorScheme: "light",
+    bg: "#f8fafc",
+    panel: "#ffffff",
+    card: "#f1f5f9",
+    accent: "#2563eb",
+    text: "#0f172a",
+    muted: "#475569",
+    border: "#e2e8f0",
+    ghost: "#eef2ff",
+  },
+};
+
+const projectThemePresets = {
+  default: {},
+  nebula: {
+    panel: "#0f1224",
+    card: "#151633",
+    accent: "#a855f7",
+    border: "#4338ca",
+    text: "#fdf2ff",
+    muted: "#c4b5fd",
+    ghost: "#090611",
+  },
+  ember: {
+    panel: "#1b0e04",
+    card: "#2c1404",
+    accent: "#fb923c",
+    border: "#c2410c",
+    text: "#fff7ed",
+    muted: "#fdba74",
+    ghost: "#140b03",
+  },
+  forest: {
+    panel: "#021411",
+    card: "#041c17",
+    accent: "#2dd4bf",
+    border: "#0f766e",
+    text: "#ccfbf1",
+    muted: "#5eead4",
+    ghost: "#02100d",
+  },
+} as const;
+type ProjectThemePresetKey = keyof typeof projectThemePresets;
+const projectThemePresetLabels: Record<ProjectThemePresetKey, string> = {
+  default: "Default",
+  nebula: "Nebula",
+  ember: "Ember",
+  forest: "Forest",
+};
+type GlobalThemeMode = "auto" | "dark" | "light";
+
+const demoSeed = {
+  project: {
+    name: "Nexus",
+    category: "Product",
+    status: "active",
+    description: "Multi-agent cockpit",
+    theme: projectThemePresets.nebula,
+  },
+  roadmap: {
+    title: "MVP Core",
+    tags: ["api", "db"],
+    progress: 0.42,
+    status: "in_progress" as Status,
+  },
+  chat: {
+    title: "Implement FS API",
+    goal: "Expose safe FS endpoints",
+    status: "in_progress" as Status,
+    progress: 0.35,
+  },
+};
+
+function normalizeTheme(theme?: Record<string, unknown> | null): ThemeOverride | undefined {
+  if (!theme) return undefined;
+  const normalized: ThemeOverride = {};
+  for (const token of THEME_TOKENS) {
+    const rawValue =
+      typeof theme[token] === "string" && theme[token] ? (theme[token] as string) : undefined;
+    const cssVarValue =
+      typeof theme[THEME_VARIABLES[token]] === "string"
+        ? (theme[THEME_VARIABLES[token]] as string)
+        : undefined;
+    const value = rawValue?.trim() || cssVarValue?.trim();
+    if (value) {
+      normalized[token] = value;
+    }
+  }
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function mapProjectPayload(project: ProjectPayload): ProjectItem {
+  return {
+    id: project.id,
+    name: project.name,
+    category: project.category ?? "Uncategorized",
+    status: (project.status as Status) ?? "active",
+    info: project.description ?? "",
+    theme: normalizeTheme(project.theme ?? undefined),
+  };
+}
+
+function mergeTheme(base: ThemePalette, override?: ThemeOverride): ThemePalette {
+  if (!override) return base;
+  const merged: ThemePalette = { ...base };
+  for (const token of THEME_TOKENS) {
+    const value = override[token];
+    if (typeof value === "string" && value.trim()) {
+      merged[token] = value.trim();
+    }
+  }
+  return merged;
+}
+
+function applyThemePalette(palette: ThemePalette) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.style.setProperty("color-scheme", palette.colorScheme);
+  for (const token of THEME_TOKENS) {
+    root.style.setProperty(THEME_VARIABLES[token], palette[token]);
+  }
+}
+
+function usePrefersColorScheme(): "dark" | "light" {
+  const [mode, setMode] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setMode(event.matches ? "dark" : "light");
+    };
+    setMode(query.matches ? "dark" : "light");
+    if ("addEventListener" in query) {
+      query.addEventListener("change", handleChange);
+      return () => query.removeEventListener("change", handleChange);
+    }
+    query.addListener(handleChange);
+    return () => query.removeListener(handleChange);
+  }, []);
+  return mode;
+}
 const demoSeed = {
   project: {
     name: "Nexus",
@@ -219,6 +399,8 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [globalThemeMode, setGlobalThemeMode] = useState<GlobalThemeMode>("auto");
+  const [projectThemePreset, setProjectThemePreset] = useState<ProjectThemePresetKey>("default");
   const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
   const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
   const [terminalOutput, setTerminalOutput] = useState<string>("Connect to stream to see output.");
@@ -276,6 +458,20 @@ export default function Page() {
   const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+  const systemColorScheme = usePrefersColorScheme();
+  const resolvedGlobalThemeMode: "dark" | "light" =
+    globalThemeMode === "auto" ? systemColorScheme : globalThemeMode;
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+  const activePalette = useMemo(
+    () => mergeTheme(baseThemes[resolvedGlobalThemeMode], selectedProject?.theme),
+    [resolvedGlobalThemeMode, selectedProject?.theme]
+  );
+  useEffect(() => {
+    applyThemePalette(activePalette);
+  }, [activePalette]);
   const [projectDraft, setProjectDraft] = useState({
     name: "",
     category: "",
@@ -730,13 +926,7 @@ export default function Page() {
           initialSelection.projectId && projectData.some((p) => p.id === initialSelection.projectId)
             ? initialSelection.projectId
             : null;
-        const mappedProjects = projectData.map((p) => ({
-          id: p.id,
-          name: p.name,
-          category: p.category ?? "Uncategorized",
-          status: (p.status as Status) ?? "active",
-          info: p.description ?? "",
-        }));
+        const mappedProjects = projectData.map(mapProjectPayload);
         setProjects(mappedProjects);
         setStatusMessage(
           projectData.length ? null : "No projects found. Seed demo data to get started."
@@ -918,21 +1108,18 @@ export default function Page() {
     setCreatingProject(true);
     setError(null);
     try {
+      const themeOverride = projectThemePresets[projectThemePreset];
       const payload = {
         name,
         category: projectDraft.category.trim() || undefined,
         description: projectDraft.description.trim() || undefined,
+        theme: Object.keys(themeOverride).length ? themeOverride : undefined,
       };
       const { id } = await createProject(sessionToken, payload);
       setProjectDraft({ name: "", category: "", description: "" });
+      setProjectThemePreset("default");
       const projectData = await fetchProjects(sessionToken);
-      const mappedProjects = projectData.map((p) => ({
-        id: p.id,
-        name: p.name,
-        category: p.category ?? "Uncategorized",
-        status: (p.status as Status) ?? "active",
-        info: p.description ?? "",
-      }));
+      const mappedProjects = projectData.map(mapProjectPayload);
       setProjects(mappedProjects);
       setSelectedProjectId(id);
       if (typeof window !== "undefined") localStorage.setItem(PROJECT_STORAGE_KEY, id);
@@ -944,7 +1131,7 @@ export default function Page() {
     } finally {
       setCreatingProject(false);
     }
-  }, [loadRoadmapsForProject, projectDraft, sessionToken]);
+  }, [loadRoadmapsForProject, projectDraft, projectThemePreset, sessionToken]);
 
   const handleCreateRoadmap = useCallback(async () => {
     if (!sessionToken || !selectedProjectId) {
@@ -2073,6 +2260,29 @@ export default function Page() {
             {loading ? "Loading…" : "Login"}
           </button>
         </div>
+        <div
+          className="login-row"
+          style={{ gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <span className="item-subtle" style={{ minWidth: 120 }}>
+            Theme mode
+          </span>
+          <select
+            className="filter"
+            value={globalThemeMode}
+            onChange={(event) => setGlobalThemeMode(event.target.value as GlobalThemeMode)}
+            style={{ minWidth: 160 }}
+          >
+            <option value="auto">Auto (OS)</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+          <span className="item-subtle" style={{ minWidth: 220, flex: 1 }}>
+            {selectedProject?.theme
+              ? `Project overrides ${selectedProject.name}`
+              : `Base ${resolvedGlobalThemeMode} theme`}
+          </span>
+        </div>
         {loginError && (
           <div className="item-subtle" style={{ color: "#EF4444" }}>
             {loginError}
@@ -2126,6 +2336,22 @@ export default function Page() {
               }
               style={{ flex: 1, minWidth: 180 }}
             />
+            <select
+              className="filter"
+              value={projectThemePreset}
+              onChange={(event) =>
+                setProjectThemePreset(event.target.value as ProjectThemePresetKey)
+              }
+              style={{ minWidth: 160 }}
+            >
+              {(Object.entries(projectThemePresetLabels) as [ProjectThemePresetKey, string][]).map(
+                ([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                )
+              )}
+            </select>
             <button
               className="tab"
               onClick={handleCreateProject}

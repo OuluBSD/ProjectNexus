@@ -1,5 +1,14 @@
 const API_BASE = process.env.NEXT_PUBLIC_BACKEND_HTTP_BASE ?? "http://localhost:3001";
 
+export type ProjectPayload = {
+  id: string;
+  name: string;
+  category?: string;
+  status: string;
+  description?: string;
+  theme?: Record<string, unknown> | null;
+};
+
 type LoginResponse = { token: string; user: { id: string; username: string } };
 
 async function fetchWithAuth<T>(token: string, path: string): Promise<T> {
@@ -28,17 +37,19 @@ export async function login(
   return res.json();
 }
 
-export async function fetchProjects(
-  token: string
-): Promise<
-  { id: string; name: string; category?: string; status: string; description?: string }[]
-> {
+export async function fetchProjects(token: string): Promise<ProjectPayload[]> {
   return fetchWithAuth(token, "/api/projects");
 }
 
 export async function createProject(
   token: string,
-  payload: { name: string; category?: string; status?: string; description?: string }
+  payload: {
+    name: string;
+    category?: string;
+    status?: string;
+    description?: string;
+    theme?: Record<string, unknown> | null;
+  }
 ): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE}/api/projects`, {
     method: "POST",
@@ -321,9 +332,7 @@ export async function fetchAuditEvents(
   return fetchWithAuth(token, `/api/audit/events?${params.toString()}`);
 }
 
-export async function fetchTemplates(
-  token: string
-): Promise<
+export async function fetchTemplates(token: string): Promise<
   {
     id: string;
     title: string;

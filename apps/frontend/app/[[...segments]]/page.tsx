@@ -1456,7 +1456,10 @@ export default function Page() {
               nextMessage = "Login required to merge chats.";
               break;
             }
-            const mergeTarget = window.prompt("Merge into chat (enter target title or ID)", "");
+            const mergeTarget = window.prompt(
+              "Merge into chat (enter target title or ID; whitespace/case variations are ignored)",
+              ""
+            );
             const trimmedTarget = mergeTarget?.trim();
             if (!trimmedTarget) {
               nextMessage = "Merge canceled.";

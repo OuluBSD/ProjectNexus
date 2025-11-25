@@ -476,3 +476,6 @@ body {
 
 /* Highlight.js GitHub Dark theme for code syntax highlighting */
 @import "highlight.js/styles/github-dark.css";
+
+/* XTerm.js terminal styles */
+@import "@xterm/xterm/css/xterm.css";

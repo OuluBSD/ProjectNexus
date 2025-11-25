@@ -37,6 +37,7 @@ import { useMessageNavigation } from "../../components/MessageNavigation";
 import { FileTree, type FileEntry } from "../../components/FileTree";
 import { CodeViewer } from "../../components/CodeViewer";
 import { DiffViewer } from "../../components/DiffViewer";
+import { Terminal } from "../../components/Terminal";
 
 type Status =
   | "inactive"
@@ -2487,52 +2488,22 @@ export default function Page() {
   const tabBody = (() => {
     switch (activeTab) {
       case "Terminal":
-        return (
+        return sessionToken && selectedProjectId ? (
+          <Terminal
+            sessionToken={sessionToken}
+            projectId={selectedProjectId}
+            onSessionCreated={(sid) => setTerminalSessionId(sid)}
+            onSessionClosed={() => setTerminalSessionId(null)}
+          />
+        ) : (
           <div className="panel-card">
-            <div className="panel-title">Persistent PTY</div>
+            <div className="panel-title">Terminal</div>
             <div className="panel-text">
-              {terminalSessionId
-                ? `Session ${terminalSessionId}`
-                : "Start a session to stream output."}
-            </div>
-            {terminalStatus && (
-              <div className="item-subtle" style={{ marginBottom: 8 }}>
-                {terminalStatus}
-              </div>
-            )}
-            <div className="login-row" style={{ gap: 8, alignItems: "center" }}>
-              <button
-                className="tab"
-                onClick={startTerminalSession}
-                disabled={terminalConnecting || !sessionToken}
-              >
-                {terminalConnecting
-                  ? "Connecting…"
-                  : terminalSessionId
-                    ? "Restart Session"
-                    : "Start Session"}
-              </button>
-              <input
-                className="filter"
-                placeholder="Type a command"
-                value={terminalInput}
-                onChange={(e) => setTerminalInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSendTerminalInput();
-                }}
-                disabled={!terminalSessionId}
-                style={{ flex: 1 }}
-              />
-              <button
-                className="tab"
-                onClick={handleSendTerminalInput}
-                disabled={!terminalSessionId || !terminalInput}
-              >
-                Send
-              </button>
-            </div>
-            <div className="panel-mono" style={{ minHeight: 240, whiteSpace: "pre-wrap" }}>
-              {terminalOutput}
+              {!sessionToken
+                ? "Please log in to use the terminal."
+                : !selectedProjectId
+                  ? "Select a project to start a terminal session."
+                  : "Loading terminal..."}
             </div>
           </div>
         );

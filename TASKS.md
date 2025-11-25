@@ -188,12 +188,12 @@ Implement DB models + TypeScript interfaces:
 
 ## 9. Main Panel – Terminal Tab
 
-- [ ] Persistent server-side PTY session
-- [ ] Attach/Detach (Play/Stop)
+- [x] Persistent server-side PTY session
+- [x] Attach/Detach (Play/Stop)
 - [ ] Auto-open setting
-- [ ] Start in project root or task folder
-- [ ] xterm.js integration
-- [ ] Transport via WebSocket
+- [x] Start in project root or task folder
+- [x] xterm.js integration
+- [x] Transport via WebSocket
 
 ---
 
@@ -288,6 +288,13 @@ Implement DB models + TypeScript interfaces:
 - Added highlight.js GitHub Dark theme import to `globals.css` for consistent syntax highlighting colors.
 - Updated `fsEntries` state type to `FileEntry[]` and transformed API responses to include full paths for each entry.
 - Verified all changes with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
+- Installed xterm.js and fit addon for terminal UI (`pnpm add --filter nexus-frontend @xterm/xterm @xterm/addon-fit`).
+- Created `Terminal` component (`apps/frontend/components/Terminal.tsx`) with xterm.js integration, WebSocket connection to backend terminal sessions, and attach/detach controls.
+- Used dynamic imports for xterm.js modules to avoid SSR issues (modules reference browser-only globals like `self`).
+- Integrated Terminal component into the main panel tabs, replacing the old placeholder implementation.
+- Added xterm.js CSS import to `globals.css` for terminal styling.
+- Terminal component automatically creates sessions tied to the selected project and connects via WebSocket to `/api/terminal/sessions/:sessionId/stream`.
+- Verified Terminal integration with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
 
 ---
 

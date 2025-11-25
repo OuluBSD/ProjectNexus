@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   buildTerminalWsUrl,
   createTerminalSession,
@@ -196,8 +196,8 @@ function readWorkspacePath(meta?: Record<string, unknown> | null) {
 
 export default function Page() {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const params = useParams<{ segments?: string | string[] }>();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
@@ -282,10 +282,22 @@ export default function Page() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [creatingRoadmap, setCreatingRoadmap] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
+  const routeSelection = useMemo(() => {
+    const paramSegments = (params as { segments?: string | string[] } | null)?.segments;
+    const segments = Array.isArray(paramSegments)
+      ? paramSegments
+      : typeof paramSegments === "string"
+        ? [paramSegments]
+        : [];
+    const projectId = segments[0] === "projects" && segments[1] ? segments[1] : null;
+    const roadmapId = segments[2] === "roadmaps" && segments[3] ? segments[3] : null;
+    const chatId = segments[4] === "chats" && segments[5] ? segments[5] : null;
+    return { projectId, roadmapId, chatId };
+  }, [params]);
   const initialSelectionRef = useRef({
-    projectId: searchParams.get("project"),
-    roadmapId: searchParams.get("roadmap"),
-    chatId: searchParams.get("chat"),
+    projectId: routeSelection.projectId ?? searchParams.get("project"),
+    roadmapId: routeSelection.roadmapId ?? searchParams.get("roadmap"),
+    chatId: routeSelection.chatId ?? searchParams.get("chat"),
   });
 
   const roadmapStatusRef = useRef(roadmapStatus);
@@ -293,18 +305,29 @@ export default function Page() {
   const auditCursorRef = useRef(auditCursor);
   const fsPathRef = useRef(fsPath);
 
+  const buildPathFromSelection = useCallback(
+    (projectId: string | null, roadmapId: string | null, chatId: string | null) => {
+      if (!projectId) return "/";
+      let path = `/projects/${projectId}`;
+      if (roadmapId) path += `/roadmaps/${roadmapId}`;
+      if (chatId) path += `/chats/${chatId}`;
+      return path;
+    },
+    []
+  );
   const syncUrlSelection = useCallback(
     (projectId: string | null, roadmapId: string | null, chatId: string | null) => {
       if (typeof window === "undefined") return;
       const params = new URLSearchParams();
-      if (projectId) params.set("project", projectId);
-      if (roadmapId) params.set("roadmap", roadmapId);
-      if (chatId) params.set("chat", chatId);
+      if (!projectId && roadmapId) params.set("roadmap", roadmapId);
+      if (!projectId && chatId) params.set("chat", chatId);
       const query = params.toString();
-      const target = query ? `${pathname}?${query}` : pathname;
+      const target = query
+        ? `${buildPathFromSelection(projectId, roadmapId, chatId)}?${query}`
+        : buildPathFromSelection(projectId, roadmapId, chatId);
       router.replace(target);
     },
-    [pathname, router]
+    [buildPathFromSelection, router]
   );
 
   useEffect(() => {

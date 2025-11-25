@@ -34,8 +34,10 @@ body {
 
 .columns {
   display: grid;
+  grid-template-areas: "projects roadmaps chats main";
   grid-template-columns: 0.4fr 0.35fr 0.35fr 2.5fr;
   gap: 12px;
+  align-items: start;
 }
 
 .column {
@@ -139,7 +141,20 @@ body {
   cursor: pointer;
 }
 
+.projects-column {
+  grid-area: projects;
+}
+
+.roadmaps-column {
+  grid-area: roadmaps;
+}
+
+.chats-column {
+  grid-area: chats;
+}
+
 .main-panel {
+  grid-area: main;
   grid-column: auto;
 }
 
@@ -272,12 +287,33 @@ body {
 
 @media (max-width: 1200px) {
   .columns {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas:
+      "projects main"
+      "roadmaps main"
+      "chats main";
+    grid-template-columns: 0.9fr 1.1fr;
+  }
+  .column {
+    min-height: auto;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
+  .page {
+    padding: 16px;
+  }
   .columns {
+    grid-template-areas:
+      "projects"
+      "roadmaps"
+      "chats"
+      "main";
     grid-template-columns: 1fr;
+  }
+  .column {
+    min-height: auto;
+  }
+  .panel-card {
+    min-height: auto;
   }
 }

@@ -2090,7 +2090,7 @@ export default function Page() {
         )}
       </div>
       <div className="columns">
-        <div className="column">
+        <div className="column projects-column">
           <header className="column-header">
             <span>Projects</span>
             <button
@@ -2161,7 +2161,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="column">
+        <div className="column roadmaps-column">
           <header className="column-header">
             <span>Roadmap Lists</span>
           </header>
@@ -2215,7 +2215,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="column">
+        <div className="column chats-column">
           <header className="column-header">
             <span>Chats</span>
           </header>

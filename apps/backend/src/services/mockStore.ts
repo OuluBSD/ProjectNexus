@@ -207,6 +207,32 @@ export function listChats(roadmapId: string) {
   return Array.from(store.chats.values()).filter((c) => c.roadmapListId === roadmapId);
 }
 
+export function getChat(chatId: string) {
+  return store.chats.get(chatId) ?? null;
+}
+
+export function findChatForMerge(roadmapListId: string, identifier: string, sourceChatId: string) {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+  const directMatch = store.chats.get(trimmed);
+  if (
+    directMatch &&
+    directMatch.roadmapListId === roadmapListId &&
+    directMatch.id !== sourceChatId
+  ) {
+    return directMatch;
+  }
+  const normalized = trimmed.toLowerCase();
+  return (
+    Array.from(store.chats.values()).find(
+      (chat) =>
+        chat.id !== sourceChatId &&
+        chat.roadmapListId === roadmapListId &&
+        (chat.title ?? "").trim().toLowerCase() === normalized
+    ) ?? null
+  );
+}
+
 export function syncRoadmapMeta(roadmapId: string) {
   const chats = listChats(roadmapId);
   const progress =
@@ -216,7 +242,12 @@ export function syncRoadmapMeta(roadmapId: string) {
   const status = deriveStatus(chats.map((chat) => chat.status ?? "in_progress"));
   const meta = getMetaChat(roadmapId);
   if (meta) {
-    store.metaChats.set(meta.id, { ...meta, progress, status, summary: `Aggregated from ${chats.length} chats` });
+    store.metaChats.set(meta.id, {
+      ...meta,
+      progress,
+      status,
+      summary: `Aggregated from ${chats.length} chats`,
+    });
   }
   const roadmap = store.roadmapLists.get(roadmapId);
   if (roadmap) {
@@ -246,6 +277,27 @@ export function updateChat(chatId: string, patch: Partial<Chat>) {
   const next = { ...current, ...patch };
   store.chats.set(chatId, next);
   return next;
+}
+
+export function mergeChats(sourceChatId: string, targetChatId: string) {
+  const source = store.chats.get(sourceChatId);
+  const target = store.chats.get(targetChatId);
+  if (!source || !target || source.roadmapListId !== target.roadmapListId) {
+    return null;
+  }
+  const sourceMessages = store.messages.get(sourceChatId) ?? [];
+  const targetMessages = store.messages.get(targetChatId) ?? [];
+  const mergedMessages = [...targetMessages, ...sourceMessages].sort((a, b) => {
+    const aTimestamp = Date.parse(a.createdAt);
+    const bTimestamp = Date.parse(b.createdAt);
+    const aTime = Number.isFinite(aTimestamp) ? aTimestamp : 0;
+    const bTime = Number.isFinite(bTimestamp) ? bTimestamp : 0;
+    return aTime - bTime;
+  });
+  store.messages.set(targetChatId, mergedMessages);
+  store.messages.delete(sourceChatId);
+  store.chats.delete(sourceChatId);
+  return { target: { ...target }, removedChatId: sourceChatId };
 }
 
 export function addMessage(chatId: string, message: Omit<Message, "id" | "createdAt">) {

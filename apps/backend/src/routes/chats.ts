@@ -2,12 +2,25 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   dbAddMessage,
   dbCreateChat,
+  dbFindChatForMerge,
+  dbGetChat,
   dbGetMessages,
   dbListChats,
+  dbMergeChats,
   dbSyncMetaFromChats,
   dbUpdateChat,
 } from "../services/projectRepository";
-import { addMessage, createChat, getMessages, listChats, syncRoadmapMeta, updateChat } from "../services/mockStore";
+import {
+  addMessage,
+  createChat,
+  findChatForMerge,
+  getChat,
+  getMessages,
+  listChats,
+  mergeChats,
+  syncRoadmapMeta,
+  updateChat,
+} from "../services/mockStore";
 import { requireSession } from "../utils/auth";
 
 export const chatRoutes: FastifyPluginAsync = async (fastify) => {
@@ -33,7 +46,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         const chat = await dbCreateChat(
           fastify.db,
           roadmapId,
-          (request.body as Record<string, unknown>) ?? {},
+          (request.body as Record<string, unknown>) ?? {}
         );
         await dbSyncMetaFromChats(fastify.db, roadmapId);
         reply.code(201).send({ id: chat.id });
@@ -50,7 +63,12 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/roadmaps/:roadmapId/chats/from-template", async (request, reply) => {
     if (!(await requireSession(request, reply))) return;
     const roadmapId = (request.params as { roadmapId: string }).roadmapId;
-    const body = request.body as { templateId: string; title?: string; goal?: string; metadata?: unknown };
+    const body = request.body as {
+      templateId: string;
+      title?: string;
+      goal?: string;
+      metadata?: unknown;
+    };
     const payload = {
       templateId: body?.templateId,
       title: body?.title,
@@ -64,7 +82,10 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         reply.code(201).send({ id: chat.id });
         return;
       } catch (err) {
-        fastify.log.error({ err }, "Failed to create chat from template in database; using in-memory store.");
+        fastify.log.error(
+          { err },
+          "Failed to create chat from template in database; using in-memory store."
+        );
       }
     }
     const chat = createChat(roadmapId, payload);
@@ -80,7 +101,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         const updated = await dbUpdateChat(
           fastify.db,
           chatId,
-          (request.body as Record<string, unknown>) ?? {},
+          (request.body as Record<string, unknown>) ?? {}
         );
         if (!updated) {
           reply.code(404).send({ error: { code: "not_found", message: "Chat not found" } });
@@ -102,6 +123,65 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     syncRoadmapMeta(updated.roadmapListId);
   });
 
+  fastify.post("/chats/:chatId/merge", async (request, reply) => {
+    if (!(await requireSession(request, reply))) return;
+    const chatId = (request.params as { chatId: string }).chatId;
+    const body = request.body as { targetIdentifier?: string };
+    const targetIdentifier = (body?.targetIdentifier ?? "").trim();
+    if (!targetIdentifier) {
+      reply.code(400).send({ error: { code: "invalid", message: "Target identifier required" } });
+      return;
+    }
+    if (fastify.db) {
+      try {
+        const sourceChat = await dbGetChat(fastify.db, chatId);
+        if (!sourceChat) {
+          reply.code(404).send({ error: { code: "not_found", message: "Chat not found" } });
+          return;
+        }
+        const targetChat = await dbFindChatForMerge(
+          fastify.db,
+          sourceChat.roadmapListId,
+          targetIdentifier,
+          chatId
+        );
+        if (!targetChat) {
+          reply.code(404).send({ error: { code: "not_found", message: "Target chat not found" } });
+          return;
+        }
+        const mergedTarget = await dbMergeChats(fastify.db, chatId, targetChat.id);
+        if (!mergedTarget) {
+          reply
+            .code(500)
+            .send({ error: { code: "merge_failed", message: "Failed to merge chats" } });
+          return;
+        }
+        await dbSyncMetaFromChats(fastify.db, sourceChat.roadmapListId);
+        reply.send({ target: mergedTarget, removedChatId: chatId });
+        return;
+      } catch (err) {
+        fastify.log.error({ err }, "Failed to merge chats in database; falling back to memory.");
+      }
+    }
+    const sourceChat = getChat(chatId);
+    if (!sourceChat) {
+      reply.code(404).send({ error: { code: "not_found", message: "Chat not found" } });
+      return;
+    }
+    const targetChat = findChatForMerge(sourceChat.roadmapListId, targetIdentifier, chatId);
+    if (!targetChat) {
+      reply.code(404).send({ error: { code: "not_found", message: "Target chat not found" } });
+      return;
+    }
+    const merged = mergeChats(chatId, targetChat.id);
+    if (!merged) {
+      reply.code(500).send({ error: { code: "merge_failed", message: "Failed to merge chats" } });
+      return;
+    }
+    syncRoadmapMeta(sourceChat.roadmapListId);
+    reply.send(merged);
+  });
+
   fastify.get("/chats/:chatId/messages", async (request, reply) => {
     if (!(await requireSession(request, reply))) return;
     const chatId = (request.params as { chatId: string }).chatId;
@@ -110,7 +190,10 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         reply.send(await dbGetMessages(fastify.db, chatId));
         return;
       } catch (err) {
-        fastify.log.error({ err }, "Failed to load chat messages from database; falling back to memory.");
+        fastify.log.error(
+          { err },
+          "Failed to load chat messages from database; falling back to memory."
+        );
       }
     }
     reply.send(getMessages(chatId));
@@ -119,7 +202,10 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/chats/:chatId/messages", async (request, reply) => {
     if (!(await requireSession(request, reply))) return;
     const chatId = (request.params as { chatId: string }).chatId;
-    const body = request.body as { role: "user" | "assistant" | "system" | "status" | "meta"; content: string };
+    const body = request.body as {
+      role: "user" | "assistant" | "system" | "status" | "meta";
+      content: string;
+    };
     if (fastify.db) {
       try {
         const message = await dbAddMessage(fastify.db, chatId, {
@@ -160,7 +246,10 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         await dbSyncMetaFromChats(fastify.db, updated.roadmapListId);
         return;
       } catch (err) {
-        fastify.log.error({ err }, "Failed to update chat status in database; falling back to memory.");
+        fastify.log.error(
+          { err },
+          "Failed to update chat status in database; falling back to memory."
+        );
       }
     }
     const updated = updateChat(chatId, patch);

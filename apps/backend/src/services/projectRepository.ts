@@ -12,6 +12,8 @@ type ChatInput = Partial<Chat>;
 type TemplateInput = Partial<Template>;
 type MessageInput = Pick<Message, "role" | "content" | "metadata">;
 
+const UUID_REGEX = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
 function deriveStatus(statuses: string[]) {
   if (statuses.length === 0) return "idle";
   if (statuses.every((status) => status === "done")) return "done";
@@ -37,7 +39,12 @@ function mapRoadmap(row: typeof schema.roadmapLists.$inferSelect): RoadmapList {
     id: row.id,
     projectId: row.projectId,
     title: row.title,
-    tags: row.tags ? row.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [],
+    tags: row.tags
+      ? row.tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      : [],
     progress: Number(row.progress ?? 0),
     status: row.status ?? "in_progress",
     metaChatId: row.metaChatId ?? undefined,
@@ -125,7 +132,7 @@ export async function dbCreateProject(db: Database, payload: ProjectInput): Prom
 export async function dbUpdateProject(
   db: Database,
   projectId: string,
-  patch: ProjectInput,
+  patch: ProjectInput
 ): Promise<Project | null> {
   const [row] = await db
     .update(schema.projects)
@@ -142,10 +149,7 @@ export async function dbUpdateProject(
   return row ? mapProject(row) : null;
 }
 
-export async function dbListRoadmaps(
-  db: Database,
-  projectId: string,
-): Promise<RoadmapList[]> {
+export async function dbListRoadmaps(db: Database, projectId: string): Promise<RoadmapList[]> {
   const rows = await db
     .select()
     .from(schema.roadmapLists)
@@ -156,7 +160,7 @@ export async function dbListRoadmaps(
 export async function dbCreateRoadmap(
   db: Database,
   projectId: string,
-  payload: RoadmapInput,
+  payload: RoadmapInput
 ): Promise<{ roadmap: RoadmapList; metaChat: MetaChat }> {
   const [roadmapRow] = await db
     .insert(schema.roadmapLists)
@@ -191,7 +195,7 @@ export async function dbCreateRoadmap(
 export async function dbUpdateRoadmap(
   db: Database,
   roadmapId: string,
-  patch: RoadmapInput,
+  patch: RoadmapInput
 ): Promise<RoadmapList | null> {
   const [row] = await db
     .update(schema.roadmapLists)
@@ -236,7 +240,7 @@ export async function dbCreateTemplate(db: Database, payload: TemplateInput): Pr
 export async function dbUpdateTemplate(
   db: Database,
   templateId: string,
-  patch: TemplateInput,
+  patch: TemplateInput
 ): Promise<Template | null> {
   const [row] = await db
     .update(schema.templates)
@@ -253,14 +257,17 @@ export async function dbUpdateTemplate(
 }
 
 export async function dbListChats(db: Database, roadmapId: string): Promise<Chat[]> {
-  const rows = await db.select().from(schema.chats).where(eq(schema.chats.roadmapListId, roadmapId));
+  const rows = await db
+    .select()
+    .from(schema.chats)
+    .where(eq(schema.chats.roadmapListId, roadmapId));
   return rows.map(mapChat);
 }
 
 export async function dbCreateChat(
   db: Database,
   roadmapId: string,
-  payload: ChatInput,
+  payload: ChatInput
 ): Promise<Chat> {
   const [row] = await db
     .insert(schema.chats)
@@ -280,7 +287,7 @@ export async function dbCreateChat(
 export async function dbUpdateChat(
   db: Database,
   chatId: string,
-  patch: ChatInput,
+  patch: ChatInput
 ): Promise<Chat | null> {
   const [row] = await db
     .update(schema.chats)
@@ -298,7 +305,55 @@ export async function dbUpdateChat(
   return row ? mapChat(row) : null;
 }
 
-export async function dbSyncMetaFromChats(db: Database, roadmapId: string): Promise<MetaChat | null> {
+export async function dbGetChat(db: Database, chatId: string): Promise<Chat | null> {
+  const [row] = await db.select().from(schema.chats).where(eq(schema.chats.id, chatId));
+  return row ? mapChat(row) : null;
+}
+
+export async function dbFindChatForMerge(
+  db: Database,
+  roadmapId: string,
+  identifier: string,
+  sourceChatId: string
+): Promise<Chat | null> {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+  if (UUID_REGEX.test(trimmed)) {
+    const directMatch = await dbGetChat(db, trimmed);
+    if (directMatch && directMatch.roadmapListId === roadmapId && directMatch.id !== sourceChatId) {
+      return directMatch;
+    }
+  }
+  const normalized = trimmed.toLowerCase();
+  const chats = await dbListChats(db, roadmapId);
+  return (
+    chats.find(
+      (chat) => chat.id !== sourceChatId && (chat.title ?? "").trim().toLowerCase() === normalized
+    ) ?? null
+  );
+}
+
+export async function dbMergeChats(
+  db: Database,
+  sourceChatId: string,
+  targetChatId: string
+): Promise<Chat | null> {
+  await db
+    .update(schema.messages)
+    .set({ chatId: targetChatId })
+    .where(eq(schema.messages.chatId, sourceChatId));
+  await db.delete(schema.chats).where(eq(schema.chats.id, sourceChatId));
+  await db
+    .update(schema.chats)
+    .set({ updatedAt: new Date() })
+    .where(eq(schema.chats.id, targetChatId));
+  return dbGetChat(db, targetChatId);
+}
+
+export async function dbSyncMetaFromChats(
+  db: Database,
+  roadmapId: string
+): Promise<MetaChat | null> {
   const chats = await db
     .select()
     .from(schema.chats)
@@ -331,7 +386,7 @@ export async function dbSyncMetaFromChats(db: Database, roadmapId: string): Prom
 export async function dbAddMessage(
   db: Database,
   chatId: string,
-  payload: MessageInput,
+  payload: MessageInput
 ): Promise<Message> {
   const [row] = await db
     .insert(schema.messages)
@@ -357,7 +412,7 @@ export async function dbGetMessages(db: Database, chatId: string): Promise<Messa
 export async function dbAddSnapshot(
   db: Database,
   projectId: string,
-  message?: string,
+  message?: string
 ): Promise<Snapshot> {
   const [row] = await db
     .insert(schema.snapshots)

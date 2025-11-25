@@ -217,3 +217,106 @@ test("chat endpoints persist to the database and keep roadmap meta in sync", asy
     store.sessions.delete(session.token);
   }
 });
+
+test("chat merge endpoint moves messages and removes the source chat", async () => {
+  const { client, db } = await buildDb();
+  const app = makeApp(db);
+  await app.register(roadmapRoutes);
+  await app.register(chatRoutes);
+  await app.ready();
+
+  const session = createSession("db-chats-merge");
+
+  try {
+    const [project] = await db.insert(schema.projects).values({ name: "Merge Host" }).returning();
+    const roadmapRes = await app.inject({
+      method: "POST",
+      url: `/projects/${project.id}/roadmaps`,
+      headers: { "x-session-token": session.token },
+      payload: { title: "Merge Roadmap" },
+    });
+    assert.equal(roadmapRes.statusCode, 201);
+    const roadmap = roadmapRes.json() as { id: string };
+
+    const createSource = await app.inject({
+      method: "POST",
+      url: `/roadmaps/${roadmap.id}/chats`,
+      headers: { "x-session-token": session.token },
+      payload: { title: "Source Chat", progress: 0.2, status: "waiting" },
+    });
+    assert.equal(createSource.statusCode, 201);
+    const sourceChatId = (createSource.json() as { id: string }).id;
+
+    const createTarget = await app.inject({
+      method: "POST",
+      url: `/roadmaps/${roadmap.id}/chats`,
+      headers: { "x-session-token": session.token },
+      payload: { title: "Target Chat", progress: 0.8, status: "in_progress" },
+    });
+    assert.equal(createTarget.statusCode, 201);
+    const targetChatId = (createTarget.json() as { id: string }).id;
+
+    await app.inject({
+      method: "POST",
+      url: `/chats/${sourceChatId}/messages`,
+      headers: { "x-session-token": session.token },
+      payload: { role: "user", content: "message from source" },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/chats/${targetChatId}/messages`,
+      headers: { "x-session-token": session.token },
+      payload: { role: "user", content: "existing target message" },
+    });
+
+    const mergeRes = await app.inject({
+      method: "POST",
+      url: `/chats/${sourceChatId}/merge`,
+      headers: { "x-session-token": session.token },
+      payload: { targetIdentifier: "Target Chat" },
+    });
+    assert.equal(mergeRes.statusCode, 200);
+    const mergedPayload = mergeRes.json() as {
+      target: { id: string; title: string; progress: number };
+      removedChatId: string;
+    };
+    assert.equal(mergedPayload.removedChatId, sourceChatId);
+    assert.equal(mergedPayload.target.id, targetChatId);
+    assert.equal(mergedPayload.target.title, "Target Chat");
+    assert.equal(mergedPayload.target.progress, 0.8);
+
+    const [sourceRow] = await db
+      .select()
+      .from(schema.chats)
+      .where(eq(schema.chats.id, sourceChatId));
+    assert.equal(sourceRow, undefined);
+
+    const messageRows = await db
+      .select()
+      .from(schema.messages)
+      .where(eq(schema.messages.chatId, targetChatId));
+    assert.equal(messageRows.length, 2);
+    assert.ok(messageRows.some((msg) => msg.content === "message from source"));
+    assert.ok(messageRows.some((msg) => msg.content === "existing target message"));
+
+    const [metaRow] = await db
+      .select()
+      .from(schema.metaChats)
+      .where(eq(schema.metaChats.roadmapListId, roadmap.id));
+    assert.ok(metaRow);
+    assert.equal(Number(metaRow?.progress ?? 0), 0.8);
+    assert.equal(metaRow?.status, "in_progress");
+
+    const [roadmapRow] = await db
+      .select()
+      .from(schema.roadmapLists)
+      .where(eq(schema.roadmapLists.id, roadmap.id));
+    assert.ok(roadmapRow);
+    assert.equal(Number(roadmapRow?.progress ?? 0), 0.8);
+    assert.equal(roadmapRow?.status, "in_progress");
+  } finally {
+    await app.close();
+    await client.close();
+    store.sessions.delete(session.token);
+  }
+});

@@ -52,6 +52,7 @@ export const chatPayload = [
     progress: 0.2,
     goal: "Source flow",
     metadata: { focus: "Needs merging" },
+    templateId: undefined,
   },
   {
     id: TARGET_CHAT_ID,
@@ -60,6 +61,7 @@ export const chatPayload = [
     progress: 0.4,
     goal: "Target flow",
     metadata: { focus: "Target focus" },
+    templateId: undefined,
   },
 ];
 

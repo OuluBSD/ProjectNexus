@@ -175,8 +175,8 @@ Implement DB models + TypeScript interfaces:
 - [x] User/assistant/system/status/meta styling
 - [x] Theming per message type
 - [x] Filters: all/user/AI/status/meta
-- [ ] Previous/next user message navigation
-- [ ] Scroll anchoring & smooth streaming
+- [x] Previous/next user message navigation
+- [x] Scroll anchoring & smooth streaming
 
 ### 8.3 Composer
 
@@ -276,6 +276,10 @@ Implement DB models + TypeScript interfaces:
 - Extended the `merge-prompt.spec.ts` regression to assert that the source chat disappears from the list after merging, leaving only the trimmed target chat entry visible.
 - Created a dedicated `TemplatePanel` component (`apps/frontend/components/TemplatePanel.tsx`) that provides a template creation form with title, goal, and jsonRequired fields, integrating with the existing `createTemplate` API helper.
 - Updated the workspace page to import and render `TemplatePanel` when the `project-templates` context panel is shown, with a `reloadTemplates` callback to refresh the list after creation.
+- Implemented message navigation with `useMessageNavigation` hook (`apps/frontend/components/MessageNavigation.tsx`) that provides prev/next buttons to jump between user messages with smooth scrolling and visual highlighting.
+- Added auto-scroll behavior to chat stream that maintains bottom position when new messages arrive, only if user is near bottom (within 100px).
+- Fixed pre-existing TypeScript errors where `project.status` and `roadmap.status` strings needed type assertions for `formatStatusLabel`.
+- Added `templateId` field to Playwright test data to satisfy type requirements in route helpers.
 
 ---
 

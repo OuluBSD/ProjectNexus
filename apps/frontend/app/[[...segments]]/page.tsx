@@ -33,6 +33,7 @@ import {
   updateRoadmap,
 } from "../../lib/api";
 import { TemplatePanel } from "../../components/TemplatePanel";
+import { useMessageNavigation } from "../../components/MessageNavigation";
 
 type Status =
   | "inactive"
@@ -537,6 +538,7 @@ export default function Page() {
   const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+  const chatStreamRef = useRef<HTMLDivElement>(null);
   const systemColorScheme = usePrefersColorScheme();
   const resolvedGlobalThemeMode: "dark" | "light" =
     globalThemeMode === "auto" ? systemColorScheme : globalThemeMode;
@@ -2460,6 +2462,21 @@ export default function Page() {
       ? messages
       : messages.filter((message) => message.role === messageFilter);
 
+  const messageNav = useMessageNavigation(messages, visibleMessages);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatStreamRef.current && messages.length > 0) {
+      const stream = chatStreamRef.current;
+      const isNearBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 100;
+      if (isNearBottom || messages.length === 1) {
+        setTimeout(() => {
+          stream.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
+        }, 100);
+      }
+    }
+  }, [messages.length]);
+
   const tabBody = (() => {
     switch (activeTab) {
       case "Terminal":
@@ -2863,7 +2880,7 @@ export default function Page() {
                 Showing {visibleMessages.length}/{messages.length} messages
               </span>
             </div>
-            <div className="chat-stream">
+            <div className="chat-stream" ref={chatStreamRef}>
               {messagesLoading && <div className="item-subtle">Loading messages…</div>}
               {!messagesLoading && messages.length === 0 && (
                 <div className="item-subtle">No messages yet.</div>
@@ -2872,7 +2889,11 @@ export default function Page() {
                 <div className="item-subtle">No messages match this filter.</div>
               )}
               {visibleMessages.map((message) => (
-                <div className="chat-row" key={message.id}>
+                <div
+                  className="chat-row"
+                  key={message.id}
+                  ref={(el) => messageNav.registerRef(message.id, el)}
+                >
                   <span
                     className="chat-role"
                     style={{
@@ -2903,6 +2924,55 @@ export default function Page() {
                 </div>
               ))}
             </div>
+            {messageNav.userMessages.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.5rem 0.75rem",
+                  borderTop: "1px solid #374151",
+                  background: "#1F2937",
+                }}
+              >
+                <span className="item-subtle" style={{ fontSize: "0.875rem" }}>
+                  User messages: {messageNav.currentUserMessageIndex + 1} /{" "}
+                  {messageNav.userMessages.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={messageNav.goToPrevious}
+                  style={{
+                    padding: "0.25rem 0.75rem",
+                    fontSize: "0.875rem",
+                    background: "#374151",
+                    color: "#F9FAFB",
+                    border: "1px solid #4B5563",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                  title="Previous user message (wraps around)"
+                >
+                  ← Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={messageNav.goToNext}
+                  style={{
+                    padding: "0.25rem 0.75rem",
+                    fontSize: "0.875rem",
+                    background: "#374151",
+                    color: "#F9FAFB",
+                    border: "1px solid #4B5563",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                  title="Next user message (wraps around)"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
             <div className="login-row" style={{ alignItems: "flex-start", gap: 8 }}>
               <textarea
                 className="code-input"
@@ -3540,7 +3610,7 @@ export default function Page() {
                     <div className="context-panel-list-item">
                       <span className="context-panel-label">Status</span>
                       <span className="item-subtle">
-                        {formatStatusLabel(contextPanel.details.project.status)}
+                        {formatStatusLabel(contextPanel.details.project.status as Status)}
                       </span>
                     </div>
                     <div className="context-panel-list-item">
@@ -3562,7 +3632,7 @@ export default function Page() {
                             <span>{roadmap.title}</span>
                             <span className="item-subtle">
                               {progressPercent(roadmap.progress)}% ·{" "}
-                              {formatStatusLabel(roadmap.status)}
+                              {formatStatusLabel(roadmap.status as Status)}
                             </span>
                           </div>
                         ))}

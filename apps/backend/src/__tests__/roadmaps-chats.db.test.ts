@@ -10,6 +10,7 @@ import * as schema from "@nexus/shared/db/schema";
 import { roadmapRoutes } from "../routes/roadmaps";
 import { chatRoutes } from "../routes/chats";
 import { createSession, store } from "../services/mockStore";
+import { dbFindChatForMerge } from "../services/projectRepository";
 
 async function buildDb() {
   const client = new PGlite();
@@ -318,5 +319,61 @@ test("chat merge endpoint moves messages and removes the source chat", async () 
     await app.close();
     await client.close();
     store.sessions.delete(session.token);
+  }
+});
+
+test("dbFindChatForMerge tolerates trimmed identifiers and case-insensitive titles", async () => {
+  const { client, db } = await buildDb();
+  try {
+    const [project] = await db.insert(schema.projects).values({ name: "Finder Host" }).returning();
+    const [roadmap] = await db
+      .insert(schema.roadmapLists)
+      .values({
+        projectId: project.id,
+        title: "Finder Roadmap",
+        tags: "merge",
+        progress: 0,
+        status: "in_progress",
+      })
+      .returning();
+    const [targetChat] = await db
+      .insert(schema.chats)
+      .values({
+        roadmapListId: roadmap.id,
+        title: "Target Finder",
+        status: "in_progress",
+        progress: 0,
+      })
+      .returning();
+    const [sourceChat] = await db
+      .insert(schema.chats)
+      .values({
+        roadmapListId: roadmap.id,
+        title: "Source Finder",
+        status: "in_progress",
+        progress: 0,
+      })
+      .returning();
+
+    const foundById = await dbFindChatForMerge(
+      db,
+      roadmap.id,
+      `  ${targetChat.id}  `,
+      sourceChat.id
+    );
+    assert.equal(foundById?.id, targetChat.id);
+
+    const foundByTitle = await dbFindChatForMerge(
+      db,
+      roadmap.id,
+      "  TARGET FINDER  ",
+      sourceChat.id
+    );
+    assert.equal(foundByTitle?.id, targetChat.id);
+
+    const skipSelfMatch = await dbFindChatForMerge(db, roadmap.id, targetChat.id, targetChat.id);
+    assert.equal(skipSelfMatch, null);
+  } finally {
+    await client.close();
   }
 });

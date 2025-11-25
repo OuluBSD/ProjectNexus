@@ -273,6 +273,7 @@ Implement DB models + TypeScript interfaces:
 - Re-ran `pnpm --filter nexus-frontend e2e` to validate `merge-prompt.spec.ts` after unlocking the prompt flow.
 - Added shared Playwright fixtures/route helper so merge and rename tests reuse the same stubbed backend responses.
 - Created `rename-prompt.spec.ts` to ensure the rename prompt trims input and updates the chat label after accepting whitespace-heavy titles.
+- Extended the `merge-prompt.spec.ts` regression to assert that the source chat disappears from the list after merging, leaving only the trimmed target chat entry visible.
 
 ---
 

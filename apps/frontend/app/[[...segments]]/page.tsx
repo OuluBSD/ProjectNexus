@@ -1585,7 +1585,12 @@ export default function Page() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save file";
       setFsError(message);
-      setFsToast({ message: "Save failed", detail: message, tone: "error" });
+      const toastDetail = fsContentPath ? `${fsContentPath}: ${message}` : message;
+      setFsToast({
+        message: "Save failed",
+        detail: toastDetail,
+        tone: "error",
+      });
     } finally {
       setFsSaving(false);
     }

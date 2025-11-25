@@ -181,7 +181,7 @@ Implement DB models + TypeScript interfaces:
 ### 8.3 Composer
 
 - [x] Multiline input (Enter send, Shift+Enter newline)
-- [ ] Slash commands + autocomplete
+- [x] Slash commands + autocomplete
 - [ ] Future attach-from-server file dialog (scaffold only)
 
 ---
@@ -295,6 +295,11 @@ Implement DB models + TypeScript interfaces:
 - Added xterm.js CSS import to `globals.css` for terminal styling.
 - Terminal component automatically creates sessions tied to the selected project and connects via WebSocket to `/api/terminal/sessions/:sessionId/stream`.
 - Verified Terminal integration with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
+- Created slash command system (`apps/frontend/lib/slashCommands.ts`) with command registry, parser, and executor supporting built-in commands (/help, /status, /meta, /clear).
+- Created `SlashCommandAutocomplete` component (`apps/frontend/components/SlashCommandAutocomplete.tsx`) with keyboard navigation (Arrow keys, Tab, Escape) and visual feedback.
+- Integrated slash commands into the chat composer with real-time autocomplete that appears when typing "/" and supports keyboard selection.
+- Slash commands are executed locally and can append system/status/meta messages, update chat status, or navigate to meta-chat.
+- Verified slash command integration with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
 
 ---
 

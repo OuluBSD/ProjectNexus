@@ -38,6 +38,12 @@ import { FileTree, type FileEntry } from "../../components/FileTree";
 import { CodeViewer } from "../../components/CodeViewer";
 import { DiffViewer } from "../../components/DiffViewer";
 import { Terminal } from "../../components/Terminal";
+import { SlashCommandAutocomplete } from "../../components/SlashCommandAutocomplete";
+import {
+  executeSlashCommand,
+  getSlashCommandSuggestions,
+  type SlashCommandContext,
+} from "../../lib/slashCommands";
 
 type Status =
   | "inactive"
@@ -520,6 +526,11 @@ export default function Page() {
   const [messageFilter, setMessageFilter] = useState<
     "all" | "user" | "assistant" | "system" | "status" | "meta"
   >("all");
+  const [slashSuggestions, setSlashSuggestions] = useState<
+    ReturnType<typeof getSlashCommandSuggestions>
+  >([]);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const [chatStatusDraft, setChatStatusDraft] = useState<Status>("in_progress");
   const [chatProgressDraft, setChatProgressDraft] = useState<string>("0");
   const [chatFocusDraft, setChatFocusDraft] = useState("");
@@ -1928,6 +1939,50 @@ export default function Page() {
     }
     const content = messageDraft.trim();
     if (!content) return;
+
+    // Check if this is a slash command
+    const slashContext: SlashCommandContext = {
+      sessionToken,
+      selectedChatId,
+      selectedProjectId,
+      selectedRoadmapId,
+      appendMessage: (role, msg) => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `temp-${Date.now()}`,
+            chatId: selectedChatId,
+            role,
+            content: msg,
+            createdAt: new Date().toISOString(),
+            metadata: null,
+          },
+        ]);
+      },
+      updateChatStatus: (status, progress) => {
+        // Placeholder for chat status update
+        setMessagesError(
+          `Status update: ${status} ${progress !== undefined ? `(${progress}%)` : ""}`
+        );
+      },
+      openMetaChat: () => {
+        if (selectedRoadmapId) {
+          const meta = metaChats[selectedRoadmapId];
+          if (meta) {
+            setSelectedChatId(meta.id);
+          }
+        }
+      },
+    };
+
+    const isSlashCommand = await executeSlashCommand(content, slashContext);
+    if (isSlashCommand) {
+      setMessageDraft("");
+      setSlashSuggestions([]);
+      return;
+    }
+
+    // Regular message
     setSendingMessage(true);
     setMessagesError(null);
     try {
@@ -1939,7 +1994,28 @@ export default function Page() {
     } finally {
       setSendingMessage(false);
     }
-  }, [loadMessagesForChat, messageDraft, selectedChatId, sessionToken]);
+  }, [
+    loadMessagesForChat,
+    messageDraft,
+    selectedChatId,
+    sessionToken,
+    selectedProjectId,
+    selectedRoadmapId,
+    metaChats,
+  ]);
+
+  // Update slash command suggestions when message draft changes
+  useEffect(() => {
+    const suggestions = getSlashCommandSuggestions(messageDraft);
+    setSlashSuggestions(suggestions);
+    setSlashSelectedIndex(0);
+  }, [messageDraft]);
+
+  const handleSlashCommandSelect = useCallback((cmd: { name: string }) => {
+    setMessageDraft(`/${cmd.name} `);
+    setSlashSuggestions([]);
+    messageInputRef.current?.focus();
+  }, []);
 
   const handleUpdateChatStatus = useCallback(
     async (override?: { status?: Status; progressPercent?: number; focus?: string }) => {
@@ -2938,14 +3014,50 @@ export default function Page() {
                 </button>
               </div>
             )}
+            {slashSuggestions.length > 0 && (
+              <SlashCommandAutocomplete
+                suggestions={slashSuggestions}
+                selectedIndex={slashSelectedIndex}
+                onSelect={handleSlashCommandSelect}
+                inputRef={messageInputRef}
+              />
+            )}
             <div className="login-row" style={{ alignItems: "flex-start", gap: 8 }}>
               <textarea
+                ref={messageInputRef}
                 className="code-input"
                 style={{ minHeight: 120, flex: 1 }}
-                placeholder="Send a message to this chat"
+                placeholder="Send a message to this chat (type / for commands)"
                 value={messageDraft}
                 onChange={(e) => setMessageDraft(e.target.value)}
                 onKeyDown={(e) => {
+                  // Handle slash command autocomplete navigation
+                  if (slashSuggestions.length > 0) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSlashSelectedIndex((prev) => (prev + 1) % slashSuggestions.length);
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSlashSelectedIndex(
+                        (prev) => (prev - 1 + slashSuggestions.length) % slashSuggestions.length
+                      );
+                      return;
+                    }
+                    if (e.key === "Tab") {
+                      e.preventDefault();
+                      handleSlashCommandSelect(slashSuggestions[slashSelectedIndex]);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setSlashSuggestions([]);
+                      return;
+                    }
+                  }
+
+                  // Regular message sending
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage();

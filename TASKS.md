@@ -114,7 +114,7 @@ Implement DB models + TypeScript interfaces:
   - `/projects/:projectId/roadmaps/:roadmapId`
   - `/projects/:projectId/roadmaps/:roadmapId/chats/:chatId`
   - [x] URL query deep links for project/roadmap/chat selection (shareable state)
-- [ ] Theme system (global + per-project overrides)
+- [x] Theme system (global + per-project overrides)
 - [x] Large screen vs. small screen layout rules
 
 ---
@@ -243,8 +243,8 @@ Implement DB models + TypeScript interfaces:
 
 ## 15. Theming & Preferences
 
-- [ ] Global theme (auto-detect OS/browser)
-- [ ] Per-project theme override
+- [x] Global theme (auto-detect OS/browser)
+- [x] Per-project theme override
 - [ ] Per-message-type color rules
 - [ ] Minimal vs. expanded detail modes
 - [ ] Sidebar animation toggles

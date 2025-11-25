@@ -692,6 +692,40 @@ export default function Page() {
     };
   }, [contextMenu]);
 
+  const ensureStatus = useCallback(
+    async (roadmapId: string, token: string, options?: { forceRefresh?: boolean }) => {
+      const existing = roadmapStatusRef.current[roadmapId];
+      if (existing && !options?.forceRefresh) return existing;
+      try {
+        const meta = await fetchMetaChat(token, roadmapId);
+        const mapped = {
+          status: (meta.status as Status) ?? "active",
+          progress: meta.progress ?? 0,
+          summary: meta.summary,
+        };
+        setMetaChats((prev) => ({ ...prev, [roadmapId]: { ...meta, ...mapped } }));
+        roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
+        setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
+        return mapped;
+      } catch {
+        try {
+          const remote = await fetchRoadmapStatus(token, roadmapId);
+          const mapped = {
+            status: (remote.status as Status) ?? "active",
+            progress: remote.progress ?? 0,
+            summary: remote.summary,
+          };
+          roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
+          setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
+          return mapped;
+        } catch {
+          return null;
+        }
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     if (!sessionToken || !selectedRoadmapId) return;
     let cancelled = false;
@@ -757,40 +791,6 @@ export default function Page() {
       setShareLinkStatus({ text: "Copy failed", tone: "error" });
     }
   }, [buildHrefFromSelection, selectedChatId, selectedProjectId, selectedRoadmapId]);
-
-  const ensureStatus = useCallback(
-    async (roadmapId: string, token: string, options?: { forceRefresh?: boolean }) => {
-      const existing = roadmapStatusRef.current[roadmapId];
-      if (existing && !options?.forceRefresh) return existing;
-      try {
-        const meta = await fetchMetaChat(token, roadmapId);
-        const mapped = {
-          status: (meta.status as Status) ?? "active",
-          progress: meta.progress ?? 0,
-          summary: meta.summary,
-        };
-        setMetaChats((prev) => ({ ...prev, [roadmapId]: { ...meta, ...mapped } }));
-        roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
-        setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
-        return mapped;
-      } catch {
-        try {
-          const remote = await fetchRoadmapStatus(token, roadmapId);
-          const mapped = {
-            status: (remote.status as Status) ?? "active",
-            progress: remote.progress ?? 0,
-            summary: remote.summary,
-          };
-          roadmapStatusRef.current = { ...roadmapStatusRef.current, [roadmapId]: mapped };
-          setRoadmapStatus((prev) => ({ ...prev, [roadmapId]: mapped }));
-          return mapped;
-        } catch {
-          return null;
-        }
-      }
-    },
-    []
-  );
 
   const loadMetaChat = useCallback(async (roadmapId: string, token: string) => {
     try {
@@ -1149,6 +1149,11 @@ export default function Page() {
     };
   }, [clearWorkspaceState, hydrateWorkspace]);
 
+  const cancelRoadmapEdit = useCallback(() => {
+    setEditingRoadmapId(null);
+    setRoadmapDraft({ title: "", tagsInput: "" });
+  }, []);
+
   const handleSelectRoadmap = useCallback(
     async (roadmapId: string) => {
       if (selectedRoadmapId && selectedRoadmapId !== roadmapId) {
@@ -1324,6 +1329,79 @@ export default function Page() {
     [ensureStatus, metaChats, roadmapStatus, sessionToken]
   );
 
+  const openProjectSettingsPanel = useCallback(
+    async (project: ProjectItem) => {
+      const basePanel = {
+        kind: "project-settings" as const,
+        projectId: project.id ?? project.name,
+        projectName: project.name,
+        loading: true,
+      };
+      setContextPanel(basePanel);
+      if (!project.id) {
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          error: "Project identifier unavailable.",
+        });
+        return;
+      }
+      if (!sessionToken) {
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          error: "Login required to view project settings.",
+        });
+        return;
+      }
+      try {
+        const details = await fetchProjectDetails(sessionToken, project.id);
+        setContextPanel({ ...basePanel, loading: false, details });
+      } catch (err) {
+        setContextPanel({
+          ...basePanel,
+          loading: false,
+          error: err instanceof Error ? err.message : "Unable to load project settings.",
+        });
+      }
+    },
+    [sessionToken]
+  );
+
+  const openProjectTemplatesPanel = useCallback((project: ProjectItem) => {
+    setContextPanel({
+      kind: "project-templates",
+      projectId: project.id ?? project.name,
+      projectName: project.name,
+    });
+  }, []);
+
+  const startProjectEdit = useCallback((project: ProjectItem) => {
+    setEditingProjectId(project.id ?? null);
+    setProjectDraft({
+      name: project.name,
+      category: project.category ?? "",
+      description: project.info ?? "",
+    });
+    setProjectThemePreset("default");
+    setStatusMessage(`Editing project ${project.name}.`);
+  }, []);
+
+  const startRoadmapEdit = useCallback((roadmap: RoadmapItem) => {
+    setEditingRoadmapId(roadmap.id ?? null);
+    setRoadmapDraft({ title: roadmap.title, tagsInput: roadmap.tags.join(", ") });
+    setStatusMessage(`Editing roadmap ${roadmap.title}.`);
+  }, []);
+
+  const promptWithDelay = (message: string, defaultValue?: string) =>
+    new Promise<string | null>((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(null);
+        return;
+      }
+      setTimeout(() => resolve(window.prompt(message, defaultValue ?? "")), 0);
+    });
+
   const handleContextAction = useCallback(
     async (actionKey: string) => {
       if (!contextMenu) return;
@@ -1394,7 +1472,7 @@ export default function Page() {
               nextMessage = "Login required to rename chats.";
               break;
             }
-            const promptValue = window.prompt("Rename chat", chat.title ?? "");
+            const promptValue = await promptWithDelay("Rename chat", chat.title ?? "");
             if (promptValue === null) {
               nextMessage = "Rename canceled.";
               break;
@@ -1456,7 +1534,7 @@ export default function Page() {
               nextMessage = "Login required to merge chats.";
               break;
             }
-            const mergeTarget = window.prompt(
+            const mergeTarget = await promptWithDelay(
               "Merge into chat (enter target title or ID; whitespace/case variations are ignored)",
               ""
             );
@@ -1645,17 +1723,6 @@ export default function Page() {
     setProjectThemePreset("default");
   }, []);
 
-  const startProjectEdit = useCallback((project: ProjectItem) => {
-    setEditingProjectId(project.id ?? null);
-    setProjectDraft({
-      name: project.name,
-      category: project.category ?? "",
-      description: project.info ?? "",
-    });
-    setProjectThemePreset("default");
-    setStatusMessage(`Editing project ${project.name}.`);
-  }, []);
-
   const handleUpdateProject = useCallback(async () => {
     if (!sessionToken) {
       setStatusMessage("Login to update projects.");
@@ -1699,17 +1766,6 @@ export default function Page() {
     sessionToken,
   ]);
 
-  const cancelRoadmapEdit = useCallback(() => {
-    setEditingRoadmapId(null);
-    setRoadmapDraft({ title: "", tagsInput: "" });
-  }, []);
-
-  const startRoadmapEdit = useCallback((roadmap: RoadmapItem) => {
-    setEditingRoadmapId(roadmap.id ?? null);
-    setRoadmapDraft({ title: roadmap.title, tagsInput: roadmap.tags.join(", ") });
-    setStatusMessage(`Editing roadmap ${roadmap.title}.`);
-  }, []);
-
   const handleUpdateRoadmap = useCallback(async () => {
     if (!sessionToken || !editingRoadmapId) {
       setStatusMessage("Select a roadmap to edit.");
@@ -1748,49 +1804,6 @@ export default function Page() {
     roadmapDraft.title,
     sessionToken,
   ]);
-
-  const openProjectSettingsPanel = useCallback(
-    async (project: ProjectItem) => {
-      const basePanel = {
-        kind: "project-settings" as const,
-        projectId: project.id ?? project.name,
-        projectName: project.name,
-        loading: true,
-      };
-      setContextPanel(basePanel);
-      if (!project.id) {
-        setContextPanel({ ...basePanel, loading: false, error: "Project identifier unavailable." });
-        return;
-      }
-      if (!sessionToken) {
-        setContextPanel({
-          ...basePanel,
-          loading: false,
-          error: "Login required to view project settings.",
-        });
-        return;
-      }
-      try {
-        const details = await fetchProjectDetails(sessionToken, project.id);
-        setContextPanel({ ...basePanel, loading: false, details });
-      } catch (err) {
-        setContextPanel({
-          ...basePanel,
-          loading: false,
-          error: err instanceof Error ? err.message : "Unable to load project settings.",
-        });
-      }
-    },
-    [sessionToken]
-  );
-
-  const openProjectTemplatesPanel = useCallback((project: ProjectItem) => {
-    setContextPanel({
-      kind: "project-templates",
-      projectId: project.id ?? project.name,
-      projectName: project.name,
-    });
-  }, []);
 
   const handleCreateRoadmap = useCallback(async () => {
     if (!sessionToken || !selectedProjectId) {
@@ -3636,6 +3649,7 @@ export default function Page() {
         <div
           className="context-menu"
           style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
         >

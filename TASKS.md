@@ -269,6 +269,8 @@ Implement DB models + TypeScript interfaces:
 - Added an integration test for the chat merge API to ensure trimmed/case-insensitive identifiers succeed and re-ran `pnpm --filter nexus-backend test`.
 - Manually exercised the frontend merge context-menu prompt using identifiers/titles with extra whitespace and casing differences to confirm the UX message matches the backend tolerance.
 - Added a Playwright regression (`apps/frontend/tests/playwright/merge-prompt.spec.ts`) that exercises the chat merge prompt, keeps the whitespace/case guidance message visible, and asserts that the trimmed target is sent to the backend stub.
+- Deferred the chat rename/merge prompts via a short timeout and stopped context-menu `mousedown` propagation so the client still opens `window.prompt` after the click completes, letting Playwright pick up the dialog reliably.
+- Re-ran `pnpm --filter nexus-frontend e2e` to validate `merge-prompt.spec.ts` after unlocking the prompt flow.
 
 ---
 

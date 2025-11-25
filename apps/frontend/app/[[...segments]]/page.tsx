@@ -16,6 +16,7 @@ import {
   createProject,
   createRoadmap,
   createChat,
+  updateChat,
   writeFileContent,
   login,
   fetchAuditEvents,
@@ -109,7 +110,7 @@ type MetaChat = {
   progress: number;
   summary?: string;
 };
-type ContextTarget = "project" | "roadmap";
+type ContextTarget = "project" | "roadmap" | "chat";
 type ContextMenuState =
   | {
       type: "project";
@@ -126,6 +127,14 @@ type ContextMenuState =
       x: number;
       y: number;
       roadmap: RoadmapItem;
+    }
+  | {
+      type: "chat";
+      id: string;
+      title: string;
+      x: number;
+      y: number;
+      chat: ChatItem;
     };
 
 type ContextPanel =
@@ -168,6 +177,11 @@ const contextActionConfig: Record<ContextTarget, { key: string; label: string }[
     { key: "edit", label: "Edit roadmap" },
     { key: "add-chat", label: "Add chat" },
     { key: "meta-chat", label: "Open meta chat" },
+  ],
+  chat: [
+    { key: "rename", label: "Rename chat" },
+    { key: "open-folder", label: "Open folder" },
+    { key: "merge", label: "Merge chat" },
   ],
 };
 const THEME_VARIABLES = {
@@ -432,6 +446,17 @@ export default function Page() {
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const resolveChatFolder = useCallback(
+    (chat?: ChatItem | null) => {
+      if (!chat) return null;
+      const directPath = readWorkspacePath(chat.metadata);
+      if (directPath) return directPath;
+      if (!chat.templateId) return null;
+      const template = templates.find((t) => t.id === chat.templateId);
+      return readWorkspacePath(template?.metadata ?? null);
+    },
+    [templates]
+  );
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
@@ -450,6 +475,7 @@ export default function Page() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const openFolderForChatRef = useRef<((chat: ChatItem | null) => void) | null>(null);
   const [globalThemeMode, setGlobalThemeMode] = useState<GlobalThemeMode>("auto");
   const [projectThemePreset, setProjectThemePreset] = useState<ProjectThemePresetKey>("default");
   const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
@@ -1235,6 +1261,22 @@ export default function Page() {
     [setContextMenu]
   );
 
+  const openChatContextMenu = useCallback(
+    (event: MouseEvent, chat: ChatItem) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setContextMenu({
+        type: "chat",
+        id: chat.id ?? chat.title ?? "chat",
+        title: chat.title ?? "Chat",
+        x: event.clientX,
+        y: event.clientY,
+        chat,
+      });
+    },
+    [setContextMenu]
+  );
+
   const openRoadmapContextPanel = useCallback(
     async (roadmap: RoadmapItem, notice?: string) => {
       const basePanel: ContextPanel = {
@@ -1339,6 +1381,82 @@ export default function Page() {
             break;
         }
       }
+      if (contextMenu.type === "chat") {
+        const chat = contextMenu.chat;
+        switch (actionKey) {
+          case "rename": {
+            if (!chat.id) {
+              nextMessage = "Chat identifier missing.";
+              break;
+            }
+            if (!sessionToken) {
+              nextMessage = "Login required to rename chats.";
+              break;
+            }
+            const promptValue = window.prompt("Rename chat", chat.title ?? "");
+            if (promptValue === null) {
+              nextMessage = "Rename canceled.";
+              break;
+            }
+            const trimmedTitle = promptValue.trim();
+            if (!trimmedTitle) {
+              nextMessage = "Chat title cannot be empty.";
+              break;
+            }
+            if (trimmedTitle === (chat.title ?? "").trim()) {
+              nextMessage = "Title unchanged.";
+              break;
+            }
+            try {
+              const updated = await updateChat(sessionToken, chat.id, { title: trimmedTitle });
+              const metadataFocus =
+                updated.metadata && typeof updated.metadata.focus === "string"
+                  ? updated.metadata.focus
+                  : null;
+              const normalizedStatus = (updated.status as Status) ?? chat.status;
+              const normalizedProgress = updated.progress ?? chat.progress;
+              setChats((prev) =>
+                prev.map((item) =>
+                  item.id === updated.id
+                    ? {
+                        ...item,
+                        title: updated.title ?? item.title,
+                        goal: updated.goal ?? item.goal,
+                        metadata: updated.metadata ?? item.metadata,
+                        status: normalizedStatus,
+                        progress: normalizedProgress,
+                        note: metadataFocus ?? updated.goal ?? item.note,
+                        focus: metadataFocus ?? item.focus,
+                      }
+                    : item
+                )
+              );
+              nextMessage = `Renamed ${chat.title ?? "chat"} to ${trimmedTitle}.`;
+            } catch (err) {
+              nextMessage =
+                err instanceof Error ? err.message : "Failed to rename chat; try again later.";
+            }
+            break;
+          }
+          case "open-folder":
+            if (openFolderForChatRef.current) {
+              openFolderForChatRef.current(chat);
+              nextMessage = `Opening folder for ${chat.title ?? "chat"}.`;
+            } else {
+              nextMessage = "Folder navigation is not ready yet.";
+            }
+            break;
+          case "merge": {
+            const mergeTarget = window.prompt("Merge into chat (enter target title or ID)", "");
+            if (mergeTarget && mergeTarget.trim()) {
+              nextMessage = `Merge requested for ${chat.title ?? "chat"} → ${mergeTarget.trim()}.`;
+            } else {
+              nextMessage = "Merge canceled.";
+            }
+            break;
+          }
+        }
+      }
       setStatusMessage(nextMessage);
       setContextMenu(null);
     },
@@ -1348,8 +1466,10 @@ export default function Page() {
       openProjectSettingsPanel,
       openProjectTemplatesPanel,
       selectedProjectId,
+      sessionToken,
       setActiveTab,
       setChatDraft,
+      setChats,
       setContextMenu,
       setMessages,
       setMessagesError,
@@ -1949,6 +2069,41 @@ export default function Page() {
     [sessionToken, selectedProjectId]
   );
 
+  const openFolderForChat = useCallback(
+    (chat: ChatItem | null) => {
+      const resolvedPath = resolveChatFolder(chat);
+      const targetPath = resolvedPath ?? ".";
+      setActiveTab("Code");
+      if (!sessionToken || !selectedProjectId) {
+        setFsToast({
+          message: "Login to browse files",
+          detail: "Select a project to open folders.",
+          tone: "error",
+        });
+        return;
+      }
+      setFsPath(targetPath);
+      loadFsTree(targetPath);
+      if (resolvedPath) {
+        setFsToast({ message: "Opening folder", detail: targetPath, tone: "success" });
+      } else {
+        setFsToast({
+          message: "No folder hint for this chat",
+          detail: "Opened project root instead.",
+          tone: "error",
+        });
+      }
+    },
+    [loadFsTree, resolveChatFolder, selectedProjectId, sessionToken]
+  );
+
+  useEffect(() => {
+    openFolderForChatRef.current = openFolderForChat;
+    return () => {
+      openFolderForChatRef.current = null;
+    };
+  }, [openFolderForChat]);
+
   const openFile = useCallback(
     async (path: string) => {
       if (!sessionToken || !selectedProjectId) {
@@ -2203,8 +2358,7 @@ export default function Page() {
   const templateForChat = selectedChat?.templateId
     ? templates.find((t) => t.id === selectedChat.templateId)
     : null;
-  const folderHint =
-    readWorkspacePath(selectedChat?.metadata) ?? readWorkspacePath(templateForChat?.metadata);
+  const folderHint = resolveChatFolder(selectedChat);
   const roadmapMeta = selectedRoadmapId ? metaChats[selectedRoadmapId] : null;
   const roadmapSummary = selectedRoadmapId ? roadmapStatus[selectedRoadmapId] : null;
   const siblingTasks = chats.filter((chat) => !chat.meta && chat.id && chat.id !== selectedChatId);
@@ -2474,32 +2628,7 @@ export default function Page() {
               >
                 Mark done
               </button>
-              <button
-                className="ghost"
-                onClick={() => {
-                  setActiveTab("Code");
-                  const targetPath = folderHint || ".";
-                  if (!sessionToken || !selectedProjectId) {
-                    setFsToast({
-                      message: "Login to browse files",
-                      detail: "Select a project to open folders.",
-                      tone: "error",
-                    });
-                    return;
-                  }
-                  setFsPath(targetPath);
-                  loadFsTree(targetPath);
-                  if (!folderHint) {
-                    setFsToast({
-                      message: "No folder hint for this chat",
-                      detail: "Opened project root instead.",
-                      tone: "error",
-                    });
-                  } else {
-                    setFsToast({ message: "Opening folder", detail: targetPath, tone: "success" });
-                  }
-                }}
-              >
+              <button className="ghost" onClick={() => openFolderForChat(selectedChat)}>
                 Open folder
               </button>
               <button
@@ -3123,6 +3252,7 @@ export default function Page() {
                 className={`item ${c.meta ? "meta" : ""} ${selectedChatId === c.id ? "active" : ""}`}
                 key={c.id ?? c.title}
                 onClick={() => handleSelectChat(c)}
+                onContextMenu={(event) => openChatContextMenu(event, c)}
                 style={{ cursor: c.id ? "pointer" : "default" }}
               >
                 <div className="item-line">

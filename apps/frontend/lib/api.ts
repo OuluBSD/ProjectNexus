@@ -267,6 +267,40 @@ export async function updateChatStatus(
   return res.json();
 }
 
+export async function updateChat(
+  token: string,
+  chatId: string,
+  payload: {
+    title?: string;
+    goal?: string;
+    status?: string;
+    progress?: number;
+    metadata?: Record<string, unknown> | null;
+    templateId?: string;
+  }
+): Promise<{
+  id: string;
+  title: string;
+  status: string;
+  progress: number;
+  goal?: string;
+  metadata?: Record<string, unknown> | null;
+  templateId?: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update chat (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchFileTree(
   token: string,
   projectId: string,

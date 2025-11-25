@@ -209,8 +209,8 @@ Implement DB models + TypeScript interfaces:
 
 ## 11. Template Engine
 
-- [ ] Template creation UI
-- [ ] Template fields (title, goal, systemPrompt, starterMessages)
+- [x] Template creation UI
+- [x] Template fields (title, goal, jsonRequired)
 - [ ] JS prompt + JS logic storage
 - [ ] Metadata editor
 - [ ] Validation of JSON status compliance
@@ -274,6 +274,8 @@ Implement DB models + TypeScript interfaces:
 - Added shared Playwright fixtures/route helper so merge and rename tests reuse the same stubbed backend responses.
 - Created `rename-prompt.spec.ts` to ensure the rename prompt trims input and updates the chat label after accepting whitespace-heavy titles.
 - Extended the `merge-prompt.spec.ts` regression to assert that the source chat disappears from the list after merging, leaving only the trimmed target chat entry visible.
+- Created a dedicated `TemplatePanel` component (`apps/frontend/components/TemplatePanel.tsx`) that provides a template creation form with title, goal, and jsonRequired fields, integrating with the existing `createTemplate` API helper.
+- Updated the workspace page to import and render `TemplatePanel` when the `project-templates` context panel is shown, with a `reloadTemplates` callback to refresh the list after creation.
 
 ---
 

@@ -32,6 +32,7 @@ import {
   updateProject,
   updateRoadmap,
 } from "../../lib/api";
+import { TemplatePanel } from "../../components/TemplatePanel";
 
 type Status =
   | "inactive"
@@ -1125,6 +1126,16 @@ export default function Page() {
     },
     [clearWorkspaceState, loadRoadmapsForProject]
   );
+
+  const reloadTemplates = useCallback(async () => {
+    if (!sessionToken) return;
+    try {
+      const templateData = await fetchTemplates(sessionToken);
+      setTemplates(templateData as TemplateItem[]);
+    } catch (err) {
+      console.error("Failed to reload templates:", err);
+    }
+  }, [sessionToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3563,20 +3574,11 @@ export default function Page() {
                 )}
               </>
             ) : contextPanel.kind === "project-templates" ? (
-              <>
-                {templates.length > 0 ? (
-                  <div className="context-panel-roadmaps">
-                    {templates.slice(0, 4).map((template) => (
-                      <div className="context-panel-list-item" key={template.id}>
-                        <span>{template.title}</span>
-                        <span className="item-subtle">{template.goal ?? "No goal defined."}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="item-subtle">No templates loaded yet.</div>
-                )}
-              </>
+              <TemplatePanel
+                templates={templates}
+                token={sessionToken ?? ""}
+                onTemplateCreated={reloadTemplates}
+              />
             ) : (
               <>
                 {contextPanel.loading ? (

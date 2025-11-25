@@ -483,6 +483,29 @@ export async function fetchTemplates(token: string): Promise<
   return fetchWithAuth(token, "/api/templates");
 }
 
+export async function createTemplate(
+  token: string,
+  payload: {
+    title: string;
+    goal?: string;
+    jsonRequired?: boolean;
+    metadata?: Record<string, unknown> | null;
+  }
+): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/api/templates`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create template (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchMetaChat(
   token: string,
   roadmapId: string

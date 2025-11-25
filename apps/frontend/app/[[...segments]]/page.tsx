@@ -242,6 +242,10 @@ export default function Page() {
   const [fsBaseSha, setFsBaseSha] = useState<string>("");
   const [fsTargetSha, setFsTargetSha] = useState<string>("HEAD");
   const [fsToast, setFsToast] = useState<ToastMessage | null>(null);
+  const [shareLinkStatus, setShareLinkStatus] = useState<{
+    text: string;
+    tone: "success" | "error";
+  } | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
@@ -315,19 +319,24 @@ export default function Page() {
     },
     []
   );
-  const syncUrlSelection = useCallback(
+  const buildHrefFromSelection = useCallback(
     (projectId: string | null, roadmapId: string | null, chatId: string | null) => {
-      if (typeof window === "undefined") return;
       const params = new URLSearchParams();
       if (!projectId && roadmapId) params.set("roadmap", roadmapId);
       if (!projectId && chatId) params.set("chat", chatId);
       const query = params.toString();
-      const target = query
-        ? `${buildPathFromSelection(projectId, roadmapId, chatId)}?${query}`
-        : buildPathFromSelection(projectId, roadmapId, chatId);
+      const path = buildPathFromSelection(projectId, roadmapId, chatId);
+      return query ? `${path}?${query}` : path;
+    },
+    [buildPathFromSelection]
+  );
+  const syncUrlSelection = useCallback(
+    (projectId: string | null, roadmapId: string | null, chatId: string | null) => {
+      if (typeof window === "undefined") return;
+      const target = buildHrefFromSelection(projectId, roadmapId, chatId);
       router.replace(target);
     },
-    [buildPathFromSelection, router]
+    [buildHrefFromSelection, router]
   );
 
   useEffect(() => {
@@ -371,6 +380,25 @@ export default function Page() {
     }
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ roadmapId, chatId }));
   }, []);
+
+  const copySelectionLink = useCallback(async () => {
+    const href = buildHrefFromSelection(selectedProjectId, selectedRoadmapId, selectedChatId);
+    if (href === "/") {
+      setShareLinkStatus({ text: "Select a project to copy a link.", tone: "error" });
+      return;
+    }
+    const url =
+      typeof window !== "undefined" && typeof window.location !== "undefined"
+        ? new URL(href, window.location.origin).toString()
+        : href;
+    try {
+      if (!navigator?.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(url);
+      setShareLinkStatus({ text: "Link copied", tone: "success" });
+    } catch {
+      setShareLinkStatus({ text: "Copy failed", tone: "error" });
+    }
+  }, [buildHrefFromSelection, selectedChatId, selectedProjectId, selectedRoadmapId]);
 
   const ensureStatus = useCallback(async (roadmapId: string, token: string) => {
     const existing = roadmapStatusRef.current[roadmapId];
@@ -1415,6 +1443,11 @@ export default function Page() {
     const timer = setTimeout(() => setFsToast(null), 2400);
     return () => clearTimeout(timer);
   }, [fsToast]);
+  useEffect(() => {
+    if (!shareLinkStatus) return;
+    const timer = setTimeout(() => setShareLinkStatus(null), 2000);
+    return () => clearTimeout(timer);
+  }, [shareLinkStatus]);
 
   useEffect(() => {
     if (!selectedChatId) {
@@ -1756,6 +1789,9 @@ export default function Page() {
               >
                 {messagesLoading ? "Refreshing…" : "Refresh"}
               </button>
+              <button className="ghost" onClick={copySelectionLink} disabled={!selectedProjectId}>
+                Copy link
+              </button>
               <button
                 className="ghost"
                 onClick={() =>
@@ -1813,6 +1849,14 @@ export default function Page() {
               >
                 Open meta-chat
               </button>
+              {shareLinkStatus && (
+                <span
+                  className="item-subtle"
+                  style={{ color: shareLinkStatus.tone === "error" ? "#ef4444" : "#94a3b8" }}
+                >
+                  {shareLinkStatus.text}
+                </span>
+              )}
             </div>
             <div className="item-line" style={{ gap: 8, flexWrap: "wrap" }}>
               {templateForChat ? (

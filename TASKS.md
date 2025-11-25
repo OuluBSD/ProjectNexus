@@ -124,7 +124,7 @@ Implement DB models + TypeScript interfaces:
 - [ ] List UI (~20 items)
 - [ ] Color-coded activity status
 - [ ] Icons + categories + subtle info line
-- [ ] Quick filter (text)
+- [x] Quick filter (text)
 - [ ] Grouping by category
 - [ ] Right-click menu (edit, settings, favorite templates)
 - [ ] Project selection triggers theme & context update
@@ -134,6 +134,7 @@ Implement DB models + TypeScript interfaces:
 ## 6. Column 2 – Roadmap Lists
 
 - [ ] List UI with tags, progress, status color
+- [x] Quick filter (title/tags)
 - [ ] Subtle summary info
 - [ ] Right-click menu (edit, add chat, open meta-chat)
 - [ ] Visual separation for special entries

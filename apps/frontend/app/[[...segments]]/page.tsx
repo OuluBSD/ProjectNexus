@@ -454,10 +454,34 @@ export default function Page() {
     description: "",
   });
   const [roadmapDraft, setRoadmapDraft] = useState({ title: "", tagsInput: "" });
+  const [projectFilter, setProjectFilter] = useState("");
+  const [roadmapFilter, setRoadmapFilter] = useState("");
   const [chatDraft, setChatDraft] = useState({ title: "", goal: "" });
   const [creatingProject, setCreatingProject] = useState(false);
   const [creatingRoadmap, setCreatingRoadmap] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
+  const normalizedProjectFilter = projectFilter.trim();
+  const filteredProjectQuery = normalizedProjectFilter.toLowerCase();
+  const filteredProjects = useMemo(() => {
+    if (!filteredProjectQuery) return projects;
+    return projects.filter((project) => {
+      const haystack = [project.name, project.category, project.info]
+        .filter(Boolean)
+        .map((value) => value.toLowerCase());
+      return haystack.some((value) => value.includes(filteredProjectQuery));
+    });
+  }, [filteredProjectQuery, projects]);
+  const normalizedRoadmapFilter = roadmapFilter.trim();
+  const filteredRoadmapQuery = normalizedRoadmapFilter.toLowerCase();
+  const filteredRoadmaps = useMemo(() => {
+    if (!filteredRoadmapQuery) return roadmaps;
+    return roadmaps.filter((roadmap) => {
+      const haystack = [roadmap.title, ...(roadmap.tags ?? []), roadmap.summary ?? ""]
+        .filter(Boolean)
+        .map((value) => value.toLowerCase());
+      return haystack.some((value) => value.includes(filteredRoadmapQuery));
+    });
+  }, [filteredRoadmapQuery, roadmaps]);
   const routeSelection = useMemo(() => {
     const paramSegments = (params as { segments?: string | string[] } | null)?.segments;
     const segments = Array.isArray(paramSegments)
@@ -2297,6 +2321,25 @@ export default function Page() {
               {seeding ? "Seeding…" : "Seed demo"}
             </button>
           </header>
+          <div
+            className="login-row"
+            style={{ gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}
+          >
+            <input
+              className="filter"
+              placeholder="Filter projects"
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              style={{ flex: 1, minWidth: 160 }}
+            />
+            <button
+              className="ghost"
+              onClick={() => setProjectFilter("")}
+              disabled={!normalizedProjectFilter}
+            >
+              Clear
+            </button>
+          </div>
           <div className="login-row" style={{ gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
             <input
               className="filter"
@@ -2349,13 +2392,18 @@ export default function Page() {
           {loading && <div className="item-subtle">Loading projects…</div>}
           {error && <div className="item-subtle">{error}</div>}
           <div className="list">
-            {!loading && projects.length === 0 && (
+            {!loading && filteredProjects.length === 0 && (
               <div className="item-subtle">
-                No projects yet.{" "}
-                {sessionToken ? "Seed demo data to populate the lists." : "Login to load data."}
+                {projects.length === 0
+                  ? sessionToken
+                    ? "No projects yet. Seed demo data to populate the lists."
+                    : "No projects yet. Login to load data."
+                  : normalizedProjectFilter
+                    ? `No projects match "${normalizedProjectFilter}".`
+                    : "No projects match the current filter."}
               </div>
             )}
-            {projects.map((p) => (
+            {filteredProjects.map((p) => (
               <div
                 className={`item ${selectedProjectId === p.id ? "active" : ""}`}
                 key={p.id ?? p.name}
@@ -2376,6 +2424,26 @@ export default function Page() {
           <header className="column-header">
             <span>Roadmap Lists</span>
           </header>
+          <div
+            className="login-row"
+            style={{ gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}
+          >
+            <input
+              className="filter"
+              placeholder="Filter roadmaps"
+              value={roadmapFilter}
+              onChange={(e) => setRoadmapFilter(e.target.value)}
+              style={{ flex: 1, minWidth: 160 }}
+              disabled={!selectedProjectId}
+            />
+            <button
+              className="ghost"
+              onClick={() => setRoadmapFilter("")}
+              disabled={!selectedProjectId || !normalizedRoadmapFilter}
+            >
+              Clear
+            </button>
+          </div>
           <div className="login-row" style={{ gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
             <input
               className="filter"
@@ -2403,10 +2471,16 @@ export default function Page() {
             </button>
           </div>
           <div className="list">
-            {roadmaps.length === 0 && selectedProjectId && (
-              <div className="item-subtle">No roadmaps for this project yet.</div>
+            {selectedProjectId && filteredRoadmaps.length === 0 && (
+              <div className="item-subtle">
+                {roadmaps.length === 0
+                  ? "No roadmaps for this project yet."
+                  : normalizedRoadmapFilter
+                    ? `No roadmaps match "${normalizedRoadmapFilter}".`
+                    : "No roadmaps for this project yet."}
+              </div>
             )}
-            {roadmaps.map((r) => (
+            {filteredRoadmaps.map((r) => (
               <div
                 className={`item ${selectedRoadmapId === r.id ? "active" : ""}`}
                 key={r.id ?? r.title}

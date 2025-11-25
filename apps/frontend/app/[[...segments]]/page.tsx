@@ -25,7 +25,7 @@ import {
   fetchTemplates,
   fetchMetaChat,
   ProjectPayload,
-} from "../lib/api";
+} from "../../lib/api";
 
 type Status =
   | "inactive"
@@ -268,35 +268,11 @@ function usePrefersColorScheme(): "dark" | "light" {
       setMode(event.matches ? "dark" : "light");
     };
     setMode(query.matches ? "dark" : "light");
-    if ("addEventListener" in query) {
-      query.addEventListener("change", handleChange);
-      return () => query.removeEventListener("change", handleChange);
-    }
-    query.addListener(handleChange);
-    return () => query.removeListener(handleChange);
+    query.addEventListener("change", handleChange);
+    return () => query.removeEventListener("change", handleChange);
   }, []);
   return mode;
 }
-const demoSeed = {
-  project: {
-    name: "Nexus",
-    category: "Product",
-    status: "active",
-    description: "Multi-agent cockpit",
-  },
-  roadmap: {
-    title: "MVP Core",
-    tags: ["api", "db"],
-    progress: 0.42,
-    status: "in_progress" as Status,
-  },
-  chat: {
-    title: "Implement FS API",
-    goal: "Expose safe FS endpoints",
-    status: "in_progress" as Status,
-    progress: 0.35,
-  },
-};
 
 const statusColor: Record<Status, string> = {
   inactive: "#9CA3AF",
@@ -2126,7 +2102,11 @@ export default function Page() {
                 onChange={(e) => setChatFocusDraft(e.target.value)}
                 placeholder="Focus / summary"
               />
-              <button className="tab" onClick={handleUpdateChatStatus} disabled={messagesLoading}>
+              <button
+                className="tab"
+                onClick={() => handleUpdateChatStatus()}
+                disabled={messagesLoading}
+              >
                 Update status
               </button>
               <button

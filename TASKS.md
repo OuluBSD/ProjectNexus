@@ -255,6 +255,7 @@ Implement DB models + TypeScript interfaces:
 - Ensured the Code tab now surfaces save failures with toast messaging that mirrors the detail shown for successful writes.
 - Confirmed the terminal WebSocket idle timer test in `nexus-backend` stays open when `TERMINAL_IDLE_MS` is zero (`tsx --test src/__tests__/terminal.ws-client.test.ts`).
 - Ran the full `nexus-backend` test suite (`pnpm --filter nexus-backend test`) so collection of backend tests now pass.
+- Verified the frontend surface by running `pnpm --filter nexus-frontend lint` and the production `pnpm --filter nexus-frontend build` after fixing the remaining `[[...segments]]` `page.tsx` issues.
 
 ---
 

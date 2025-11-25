@@ -155,6 +155,7 @@ Implement DB models + TypeScript interfaces:
 - [x] **Meta-chat appears at top**, visually separated
 - [x] Right-click context menu (rename, open folder, merge)
 - [x] Merge action persists server-side history and refreshes chat selection
+- [ ] Validate merge target detection across identifier formats (trimmed IDs and case-insensitive titles)
 
 ---
 

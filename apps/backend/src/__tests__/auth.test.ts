@@ -205,7 +205,9 @@ test("login purges expired sessions before creating a db session", async () => {
         returning: async () => {
           if (table === schema.users) {
             calls.push("insert.users");
-            return [{ id: "db-user", username: values.username, passwordHash: values.passwordHash }];
+            return [
+              { id: "db-user", username: values.username, passwordHash: values.passwordHash },
+            ];
           }
           calls.push("insert.sessions");
           return [
@@ -350,4 +352,43 @@ test("validateToken uses memory store when database returns no session", async (
   assert.equal(resolved?.token, session.token);
   assert.equal(resolved?.username, session.username);
   store.sessions.delete(session.token);
+});
+
+test("GET /auth/session requires a valid session token", async () => {
+  const app = Fastify({ logger: false });
+  await app.register(authRoutes, { prefix: "/auth" });
+  await app.ready();
+
+  try {
+    const res = await app.inject({ method: "GET", url: "/auth/session" });
+    assert.equal(res.statusCode, 401);
+    assert.deepEqual(res.json(), {
+      error: { code: "unauthorized", message: "Missing or invalid session" },
+    });
+  } finally {
+    await app.close();
+  }
+});
+
+test("GET /auth/session returns the authenticated session", async () => {
+  const app = Fastify({ logger: false });
+  await app.register(authRoutes, { prefix: "/auth" });
+  await app.ready();
+  const session = createSession("session-user");
+
+  try {
+    const res = await app.inject({
+      method: "GET",
+      url: "/auth/session",
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.json(), {
+      token: session.token,
+      user: { id: session.userId, username: session.username },
+    });
+  } finally {
+    store.sessions.delete(session.token);
+    await app.close();
+  }
 });

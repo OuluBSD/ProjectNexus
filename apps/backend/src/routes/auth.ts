@@ -34,8 +34,7 @@ function recordFailure(key: string) {
     return;
   }
   const failures = current.failures + 1;
-  const blockedUntil =
-    failures >= LOGIN_MAX_FAILURES ? now + LOGIN_BLOCK_MS : current.blockedUntil;
+  const blockedUntil = failures >= LOGIN_MAX_FAILURES ? now + LOGIN_BLOCK_MS : current.blockedUntil;
   loginAttempts.set(key, { failures, firstAttempt: current.firstAttempt, blockedUntil });
 }
 
@@ -86,9 +85,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         await purgeExpiredSessions(fastify.db);
         const existing = await getUserByUsername(fastify.db, body.username);
         const passwordValid =
-          !!existing?.passwordHash && !!body.password && verifyPassword(body.password, existing.passwordHash);
+          !!existing?.passwordHash &&
+          !!body.password &&
+          verifyPassword(body.password, existing.passwordHash);
         const keyfileValid =
-          !!existing?.keyfilePath && !!body.keyfileToken && verifyKeyfile(body.keyfileToken, existing.keyfilePath);
+          !!existing?.keyfilePath &&
+          !!body.keyfileToken &&
+          verifyKeyfile(body.keyfileToken, existing.keyfilePath);
 
         if (existing) {
           const needsPassword = !!existing.passwordHash;
@@ -123,7 +126,9 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           recordFailure(attemptKey);
           reply
             .code(400)
-            .send({ error: { code: "bad_request", message: "Provide a password or keyfileToken" } });
+            .send({
+              error: { code: "bad_request", message: "Provide a password or keyfileToken" },
+            });
           return;
         }
 
@@ -150,6 +155,15 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       user: { id: session.userId, username: session.username },
     });
     loginAttempts.delete(attemptKey);
+  });
+
+  fastify.get("/session", async (request, reply) => {
+    const session = await requireSession(request, reply);
+    if (!session) return;
+    reply.send({
+      token: session.token,
+      user: { id: session.userId, username: session.username },
+    });
   });
 
   fastify.post("/logout", async (request, reply) => {

@@ -6,6 +6,7 @@ High-level REST + WebSocket contracts for the MVP. Paths are prefixed with `/api
 
 - `POST /auth/login` – { username, password | keyfileToken } → { token }
 - `POST /auth/logout` – header `Authorization: Bearer <token>` → 204
+- `GET /auth/session` – header `Authorization: Bearer <token>` → { token, user: { id, username } } (401 on missing/invalid)
 
 ## Projects
 

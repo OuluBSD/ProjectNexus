@@ -383,8 +383,7 @@ Implement DB models + TypeScript interfaces:
 
 - [x] Global theme (auto-detect OS/browser)
 - [x] Per-project theme override
-- [x] Per-message-type color rules
-- [ ] Minimal vs. expanded detail modes
+- [x] Minimal vs. expanded detail modes
 - [x] Sidebar animation toggles
 
 ---

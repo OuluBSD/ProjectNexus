@@ -497,6 +497,12 @@ export default function Page() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(TERMINAL_AUTO_OPEN_KEY) === "true";
   });
+  const DETAIL_MODE_KEY = "agentmgr:detailMode";
+  const [detailMode, setDetailMode] = useState<"minimal" | "expanded">(() => {
+    if (typeof window === "undefined") return "expanded";
+    const stored = localStorage.getItem(DETAIL_MODE_KEY);
+    return stored === "minimal" ? "minimal" : "expanded";
+  });
   const [projectThemePreset, setProjectThemePreset] = useState<ProjectThemePresetKey>("default");
   const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
   const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
@@ -587,6 +593,12 @@ export default function Page() {
       localStorage.setItem(TERMINAL_AUTO_OPEN_KEY, String(autoOpenTerminal));
     }
   }, [autoOpenTerminal, TERMINAL_AUTO_OPEN_KEY]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(DETAIL_MODE_KEY, detailMode);
+    }
+  }, [detailMode]);
   const [projectDraft, setProjectDraft] = useState({
     name: "",
     category: "",
@@ -3202,6 +3214,46 @@ export default function Page() {
             Auto-open terminal on project selection
           </label>
         </div>
+        <div
+          className="login-row"
+          style={{ gap: 8, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <span className="item-subtle" style={{ minWidth: 120 }}>
+            Detail mode
+          </span>
+          <input
+            type="radio"
+            id="detail-mode-minimal"
+            name="detail-mode"
+            value="minimal"
+            checked={detailMode === "minimal"}
+            onChange={(e) => setDetailMode(e.target.value as "minimal" | "expanded")}
+            style={{ cursor: "pointer" }}
+          />
+          <label
+            htmlFor="detail-mode-minimal"
+            className="item-subtle"
+            style={{ cursor: "pointer" }}
+          >
+            Minimal
+          </label>
+          <input
+            type="radio"
+            id="detail-mode-expanded"
+            name="detail-mode"
+            value="expanded"
+            checked={detailMode === "expanded"}
+            onChange={(e) => setDetailMode(e.target.value as "minimal" | "expanded")}
+            style={{ cursor: "pointer" }}
+          />
+          <label
+            htmlFor="detail-mode-expanded"
+            className="item-subtle"
+            style={{ cursor: "pointer" }}
+          >
+            Expanded
+          </label>
+        </div>
         {statusMessage && (
           <div className="item-subtle" style={{ color: "#F59E0B", marginTop: 8 }}>
             {statusMessage}
@@ -3349,7 +3401,7 @@ export default function Page() {
                       <span className="item-title">{p.name}</span>
                       <span className="item-pill">{p.category}</span>
                     </div>
-                    <div className="item-sub">{p.info}</div>
+                    {detailMode === "expanded" && <div className="item-sub">{p.info}</div>}
                   </div>
                 ))}
               </div>
@@ -3470,14 +3522,16 @@ export default function Page() {
                     <span className="item-subtle">{progressPercent(displayProgress)}%</span>
                   </div>
                   <div className="roadmap-summary-row">
-                    <span className="item-subtle">
-                      {displaySummary ?? "Summary unavailable for this roadmap."}
-                    </span>
+                    {detailMode === "expanded" && (
+                      <span className="item-subtle">
+                        {displaySummary ?? "Summary unavailable for this roadmap."}
+                      </span>
+                    )}
                     <span className="item-subtle roadmap-status-text">
                       {formatStatusLabel(displayStatus)}
                     </span>
                   </div>
-                  {r.tags.length > 0 && (
+                  {detailMode === "expanded" && r.tags.length > 0 && (
                     <div className="roadmap-tags">
                       {r.tags.map((tag) => (
                         <span className="item-pill" key={`${r.title}-${tag}`}>
@@ -3547,7 +3601,7 @@ export default function Page() {
                   <span className="item-title">{c.title}</span>
                   <span className="item-subtle">{progressPercent(c.progress)}%</span>
                 </div>
-                <div className="item-sub">{c.note}</div>
+                {detailMode === "expanded" && <div className="item-sub">{c.note}</div>}
               </div>
             ))}
           </div>

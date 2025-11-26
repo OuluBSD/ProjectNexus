@@ -7,6 +7,10 @@ type TemplateItem = {
   id: string;
   title: string;
   goal?: string;
+  systemPrompt?: string;
+  starterMessages?: Array<{ role: string; content: string }>;
+  javascriptPrompt?: string;
+  javascriptLogic?: string;
   jsonRequired?: boolean;
   metadata?: Record<string, unknown> | null;
 };
@@ -19,10 +23,15 @@ type TemplatePanelProps = {
 
 export function TemplatePanel({ templates, token, onTemplateCreated }: TemplatePanelProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [formState, setFormState] = useState({
     title: "",
     goal: "",
+    systemPrompt: "",
+    javascriptPrompt: "",
+    javascriptLogic: "",
     jsonRequired: false,
+    metadata: "{}",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +43,17 @@ export function TemplatePanel({ templates, token, onTemplateCreated }: TemplateP
       return;
     }
 
+    // Validate metadata JSON
+    let metadataObj: Record<string, unknown> | undefined;
+    if (formState.metadata.trim()) {
+      try {
+        metadataObj = JSON.parse(formState.metadata);
+      } catch {
+        setError("Invalid JSON in metadata field");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -41,11 +61,24 @@ export function TemplatePanel({ templates, token, onTemplateCreated }: TemplateP
       await createTemplate(token, {
         title: formState.title.trim(),
         goal: formState.goal.trim() || undefined,
+        systemPrompt: formState.systemPrompt.trim() || undefined,
+        javascriptPrompt: formState.javascriptPrompt.trim() || undefined,
+        javascriptLogic: formState.javascriptLogic.trim() || undefined,
         jsonRequired: formState.jsonRequired,
+        metadata: metadataObj,
       });
 
-      setFormState({ title: "", goal: "", jsonRequired: false });
+      setFormState({
+        title: "",
+        goal: "",
+        systemPrompt: "",
+        javascriptPrompt: "",
+        javascriptLogic: "",
+        jsonRequired: false,
+        metadata: "{}",
+      });
       setShowCreateForm(false);
+      setShowAdvanced(false);
       onTemplateCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create template");
@@ -55,9 +88,18 @@ export function TemplatePanel({ templates, token, onTemplateCreated }: TemplateP
   };
 
   const handleCancel = () => {
-    setFormState({ title: "", goal: "", jsonRequired: false });
+    setFormState({
+      title: "",
+      goal: "",
+      systemPrompt: "",
+      javascriptPrompt: "",
+      javascriptLogic: "",
+      jsonRequired: false,
+      metadata: "{}",
+    });
     setError(null);
     setShowCreateForm(false);
+    setShowAdvanced(false);
   };
 
   return (
@@ -149,6 +191,155 @@ export function TemplatePanel({ templates, token, onTemplateCreated }: TemplateP
                   Require JSON status output
                 </label>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.25rem 0.5rem",
+                  background: "#374151",
+                  color: "#D1D5DB",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  alignSelf: "flex-start",
+                }}
+              >
+                {showAdvanced ? "▼ Hide Advanced" : "▶ Show Advanced"}
+              </button>
+
+              {showAdvanced && (
+                <>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#9CA3AF",
+                        display: "block",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      System Prompt (optional)
+                    </label>
+                    <textarea
+                      placeholder="System prompt for the AI..."
+                      value={formState.systemPrompt}
+                      onChange={(e) =>
+                        setFormState((s) => ({ ...s, systemPrompt: e.target.value }))
+                      }
+                      disabled={isSubmitting}
+                      rows={3}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        fontSize: "0.75rem",
+                        border: "1px solid #374151",
+                        borderRadius: "4px",
+                        background: "#0D1117",
+                        color: "#F9FAFB",
+                        fontFamily: "monospace",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#9CA3AF",
+                        display: "block",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      JavaScript Prompt (optional)
+                    </label>
+                    <textarea
+                      placeholder="JS code to generate dynamic prompts..."
+                      value={formState.javascriptPrompt}
+                      onChange={(e) =>
+                        setFormState((s) => ({ ...s, javascriptPrompt: e.target.value }))
+                      }
+                      disabled={isSubmitting}
+                      rows={4}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        fontSize: "0.75rem",
+                        border: "1px solid #374151",
+                        borderRadius: "4px",
+                        background: "#0D1117",
+                        color: "#F9FAFB",
+                        fontFamily: "monospace",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#9CA3AF",
+                        display: "block",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      JavaScript Logic (optional)
+                    </label>
+                    <textarea
+                      placeholder="JS code to interpret JSON status..."
+                      value={formState.javascriptLogic}
+                      onChange={(e) =>
+                        setFormState((s) => ({ ...s, javascriptLogic: e.target.value }))
+                      }
+                      disabled={isSubmitting}
+                      rows={4}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        fontSize: "0.75rem",
+                        border: "1px solid #374151",
+                        borderRadius: "4px",
+                        background: "#0D1117",
+                        color: "#F9FAFB",
+                        fontFamily: "monospace",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#9CA3AF",
+                        display: "block",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      Metadata (JSON, optional)
+                    </label>
+                    <textarea
+                      placeholder='{"key": "value"}'
+                      value={formState.metadata}
+                      onChange={(e) => setFormState((s) => ({ ...s, metadata: e.target.value }))}
+                      disabled={isSubmitting}
+                      rows={3}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        fontSize: "0.75rem",
+                        border: "1px solid #374151",
+                        borderRadius: "4px",
+                        background: "#0D1117",
+                        color: "#F9FAFB",
+                        fontFamily: "monospace",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+
               {error && (
                 <div className="item-subtle" style={{ color: "#EF4444" }}>
                   {error}

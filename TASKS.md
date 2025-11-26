@@ -210,8 +210,8 @@ Implement DB models + TypeScript interfaces:
 
 - [x] Template creation UI
 - [x] Template fields (title, goal, jsonRequired)
-- [ ] JS prompt + JS logic storage
-- [ ] Metadata editor
+- [x] JS prompt + JS logic storage
+- [x] Metadata editor
 - [ ] Validation of JSON status compliance
 
 ---
@@ -300,6 +300,13 @@ Implement DB models + TypeScript interfaces:
 - Integrated slash commands into the chat composer with real-time autocomplete that appears when typing "/" and supports keyboard selection.
 - Slash commands are executed locally and can append system/status/meta messages, update chat status, or navigate to meta-chat.
 - Verified slash command integration with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
+- Enhanced Template model to include systemPrompt, starterMessages, javascriptPrompt, and javascriptLogic fields (database schema already had these fields).
+- Updated Template type in `apps/backend/src/types.ts` to include JS fields and mapper functions in `projectRepository.ts` to handle them.
+- Updated mockStore template functions to support all template fields including JS fields.
+- Enhanced TemplatePanel component with expandable "Advanced" section containing code editors for system prompts, JavaScript prompts/logic, and JSON metadata.
+- Added JSON validation for metadata field in template creation form.
+- Updated frontend API types in `apps/frontend/lib/api.ts` to match backend Template structure.
+- Verified template enhancements with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
 
 ---
 

@@ -66,6 +66,11 @@ function mapTemplate(row: typeof schema.templates.$inferSelect): Template {
     id: row.id,
     title: row.title,
     goal: row.goal ?? undefined,
+    systemPrompt: row.systemPrompt ?? undefined,
+    starterMessages:
+      (row.starterMessages as Array<{ role: string; content: string }> | null) ?? undefined,
+    javascriptPrompt: row.javascriptPrompt ?? undefined,
+    javascriptLogic: row.javascriptLogic ?? undefined,
     jsonRequired: row.jsonRequired ?? false,
     metadata: (row.metadata as Record<string, unknown> | null) ?? undefined,
   };
@@ -230,6 +235,10 @@ export async function dbCreateTemplate(db: Database, payload: TemplateInput): Pr
     .values({
       title: payload.title ?? "Untitled Template",
       goal: payload.goal,
+      systemPrompt: payload.systemPrompt,
+      starterMessages: payload.starterMessages,
+      javascriptPrompt: payload.javascriptPrompt,
+      javascriptLogic: payload.javascriptLogic,
       jsonRequired: payload.jsonRequired ?? false,
       metadata: payload.metadata,
     })
@@ -247,6 +256,10 @@ export async function dbUpdateTemplate(
     .set({
       title: patch.title,
       goal: patch.goal,
+      systemPrompt: patch.systemPrompt,
+      starterMessages: patch.starterMessages,
+      javascriptPrompt: patch.javascriptPrompt,
+      javascriptLogic: patch.javascriptLogic,
       jsonRequired: patch.jsonRequired,
       metadata: patch.metadata,
       updatedAt: new Date(),

@@ -324,6 +324,10 @@ export function createTemplate(payload: Partial<Template>) {
     id: crypto.randomUUID(),
     title: payload.title ?? "Untitled Template",
     goal: payload.goal,
+    systemPrompt: payload.systemPrompt,
+    starterMessages: payload.starterMessages,
+    javascriptPrompt: payload.javascriptPrompt,
+    javascriptLogic: payload.javascriptLogic,
     jsonRequired: payload.jsonRequired ?? false,
     metadata: payload.metadata,
   };

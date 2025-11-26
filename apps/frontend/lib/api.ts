@@ -476,6 +476,10 @@ export async function fetchTemplates(token: string): Promise<
     id: string;
     title: string;
     goal?: string;
+    systemPrompt?: string;
+    starterMessages?: Array<{ role: string; content: string }>;
+    javascriptPrompt?: string;
+    javascriptLogic?: string;
     jsonRequired?: boolean;
     metadata?: Record<string, unknown> | null;
   }[]
@@ -488,6 +492,10 @@ export async function createTemplate(
   payload: {
     title: string;
     goal?: string;
+    systemPrompt?: string;
+    starterMessages?: Array<{ role: string; content: string }>;
+    javascriptPrompt?: string;
+    javascriptLogic?: string;
     jsonRequired?: boolean;
     metadata?: Record<string, unknown> | null;
   }

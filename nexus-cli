@@ -3,8 +3,6 @@
 # nexus-cli wrapper script
 # Provides convenient access to the Project Nexus CLI management tool
 
-set -e
-
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -24,4 +22,16 @@ if ! command -v pnpm &> /dev/null; then
 fi
 
 # Execute the CLI with all arguments passed through
-exec pnpm --filter nexus-backend exec tsx src/cli.ts "$@"
+# Filter out pnpm's confusing error messages
+STDOUT_TMP=$(mktemp)
+STDERR_TMP=$(mktemp)
+trap "rm -f $STDOUT_TMP $STDERR_TMP" EXIT
+
+pnpm --filter nexus-backend exec tsx src/cli.ts "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+EXIT_CODE=$?
+
+# Filter and show output, removing pnpm noise
+grep -v -E "(ERR_PNPM|^undefined$|^/.*apps/backend:$|^ ERR_PNPM)" "$STDOUT_TMP" || true
+grep -v -E "(ERR_PNPM|^undefined$|^/.*apps/backend:$|^ ERR_PNPM)" "$STDERR_TMP" >&2 || true
+
+exit $EXIT_CODE

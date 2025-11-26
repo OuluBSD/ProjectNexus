@@ -5,6 +5,7 @@ import {
   dbFindChatForMerge,
   dbGetChat,
   dbGetMessages,
+  dbGetTemplate,
   dbListChats,
   dbMergeChats,
   dbSyncMetaFromChats,
@@ -16,11 +17,13 @@ import {
   findChatForMerge,
   getChat,
   getMessages,
+  getTemplate,
   listChats,
   mergeChats,
   syncRoadmapMeta,
   updateChat,
 } from "../services/mockStore";
+import { processMessageForJSON } from "../services/jsonStatusProcessor";
 import { requireSession } from "../utils/auth";
 
 export const chatRoutes: FastifyPluginAsync = async (fastify) => {
@@ -206,6 +209,66 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       role: "user" | "assistant" | "system" | "status" | "meta";
       content: string;
     };
+
+    // Fetch chat and template for JSON status processing
+    let chat = null;
+    let template = null;
+    if (fastify.db) {
+      try {
+        chat = await dbGetChat(fastify.db, chatId);
+        if (chat?.templateId) {
+          template = await dbGetTemplate(fastify.db, chat.templateId);
+        }
+      } catch (err) {
+        fastify.log.error({ err }, "Failed to fetch chat/template from database");
+      }
+    } else {
+      chat = getChat(chatId);
+      if (chat?.templateId) {
+        template = getTemplate(chat.templateId);
+      }
+    }
+
+    // Process JSON status for assistant messages
+    let jsonResult = null;
+    if (body.role === "assistant" && chat && template) {
+      try {
+        jsonResult = await processMessageForJSON(body.content, chat, template);
+        if (!jsonResult.valid && jsonResult.needsReformat) {
+          // Add a system message requesting reformatted JSON
+          const errorMessage = {
+            role: "system" as const,
+            content: `JSON Status Error: ${jsonResult.error}\n\nPlease provide a valid JSON status update with 'status' and 'progress' fields.`,
+          };
+          if (fastify.db) {
+            await dbAddMessage(fastify.db, chatId, errorMessage);
+          } else {
+            addMessage(chatId, { chatId, ...errorMessage });
+          }
+        } else if (jsonResult.valid && (jsonResult.status || jsonResult.progress !== undefined)) {
+          // Update chat status/progress based on JSON
+          const statusUpdate = {
+            status: jsonResult.status,
+            progress: jsonResult.progress,
+          };
+          if (fastify.db) {
+            await dbUpdateChat(fastify.db, chatId, statusUpdate);
+            if (chat.roadmapListId) {
+              await dbSyncMetaFromChats(fastify.db, chat.roadmapListId);
+            }
+          } else {
+            updateChat(chatId, statusUpdate);
+            if (chat.roadmapListId) {
+              syncRoadmapMeta(chat.roadmapListId);
+            }
+          }
+        }
+      } catch (err) {
+        fastify.log.error({ err }, "Failed to process JSON status");
+      }
+    }
+
+    // Add the message
     if (fastify.db) {
       try {
         const message = await dbAddMessage(fastify.db, chatId, {

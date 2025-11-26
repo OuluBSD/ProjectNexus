@@ -229,11 +229,11 @@ Implement DB models + TypeScript interfaces:
 
 ## 13. JSON Status Pipeline
 
-- [ ] Enforce JSON-before-stop protocol for applicable templates
-- [ ] Detect malformed JSON → request reformatted output
-- [ ] Run template’s JS logic to interpret JSON
-- [ ] Update chat status + percent
-- [ ] Update roadmap-level percent + flags
+- [x] Enforce JSON-before-stop protocol for applicable templates
+- [x] Detect malformed JSON → request reformatted output
+- [x] Run template's JS logic to interpret JSON
+- [x] Update chat status + percent
+- [x] Update roadmap-level percent + flags
 
 ---
 
@@ -316,6 +316,16 @@ Implement DB models + TypeScript interfaces:
 - Replaced old embedded login panel with clean user info header showing logged-in username and logout button.
 - Backend authentication already complete with login/logout endpoints, session validation middleware, PBKDF2 password hashing, keyfile support, and rate limiting (5 failed attempts = 2min lockout).
 - Verified authentication flow with `pnpm --filter nexus-frontend lint`, `pnpm --filter nexus-frontend build`, `pnpm --filter nexus-frontend e2e`, and `pnpm --filter nexus-backend test` (all passing).
+- Created JSON status processor service (`apps/backend/src/services/jsonStatusProcessor.ts`) that handles JSON-before-stop protocol for templates with `jsonRequired: true`.
+- Implemented JSON extraction supporting code fences (```json), end-of-message JSON, and pure JSON responses.
+- Added JSON validation requiring 'status' and 'progress' fields with progress range 0-100.
+- Implemented JavaScript logic executor that runs template's `javascriptLogic` on extracted JSON to compute final status/progress.
+- Hooked JSON processor into POST /chats/:chatId/messages endpoint to automatically process assistant messages.
+- Added error handling that injects system messages when JSON is malformed, requesting reformatted output.
+- Updated chat status/progress and synced roadmap meta automatically when valid JSON is processed.
+- Added dbGetTemplate and getTemplate functions to projectRepository and mockStore for template fetching.
+- Created comprehensive test suite (`apps/backend/src/__tests__/jsonStatusProcessor.test.ts`) with 23 tests covering all processor functions.
+- Verified JSON Status Pipeline with `pnpm --filter nexus-backend test` (61 tests passing) and `pnpm --filter nexus-frontend lint && build` (all passing).
 
 ---
 

@@ -229,6 +229,11 @@ export async function dbListTemplates(db: Database): Promise<Template[]> {
   return rows.map(mapTemplate);
 }
 
+export async function dbGetTemplate(db: Database, templateId: string): Promise<Template | null> {
+  const [row] = await db.select().from(schema.templates).where(eq(schema.templates.id, templateId));
+  return row ? mapTemplate(row) : null;
+}
+
 export async function dbCreateTemplate(db: Database, payload: TemplateInput): Promise<Template> {
   const [row] = await db
     .insert(schema.templates)

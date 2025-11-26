@@ -319,6 +319,10 @@ export function listTemplates() {
   return Array.from(store.templates.values());
 }
 
+export function getTemplate(templateId: string) {
+  return store.templates.get(templateId) ?? null;
+}
+
 export function createTemplate(payload: Partial<Template>) {
   const template: Template = {
     id: crypto.randomUUID(),

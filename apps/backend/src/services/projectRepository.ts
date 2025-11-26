@@ -197,6 +197,14 @@ export async function dbCreateRoadmap(
   return { roadmap: mapRoadmap(patchedRoadmap ?? roadmapRow), metaChat: mapMetaChat(metaRow) };
 }
 
+export async function dbGetRoadmap(db: Database, roadmapId: string): Promise<RoadmapList | null> {
+  const [row] = await db
+    .select()
+    .from(schema.roadmapLists)
+    .where(eq(schema.roadmapLists.id, roadmapId));
+  return row ? mapRoadmap(row) : null;
+}
+
 export async function dbUpdateRoadmap(
   db: Database,
   roadmapId: string,

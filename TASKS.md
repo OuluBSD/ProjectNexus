@@ -239,12 +239,12 @@ Implement DB models + TypeScript interfaces:
 
 ## 14. Git-Backed Storage
 
-- [ ] Directory structure under /projects
-- [ ] Writable workspace folder
-- [ ] Commit creation on snapshot
-- [ ] Bridge DB updates ↔ git commits
-- [ ] Store messages as JSONL
-- [ ] Track template/JS logic versions
+- [x] Directory structure under /projects
+- [x] Writable workspace folder
+- [x] Commit creation on snapshot
+- [x] Bridge DB updates ↔ git commits
+- [x] Store messages as JSONL
+- [x] Track template/JS logic versions
 
 ---
 
@@ -326,6 +326,17 @@ Implement DB models + TypeScript interfaces:
 - Added dbGetTemplate and getTemplate functions to projectRepository and mockStore for template fetching.
 - Created comprehensive test suite (`apps/backend/src/__tests__/jsonStatusProcessor.test.ts`) with 23 tests covering all processor functions.
 - Verified JSON Status Pipeline with `pnpm --filter nexus-backend test` (61 tests passing) and `pnpm --filter nexus-frontend lint && build` (all passing).
+- Created git-backed storage system (`apps/backend/src/services/gitStorage.ts`) with hierarchical directory structure: `/projects/{projectId}/roadmaps/{roadmapId}/chats/{chatId}/`.
+- Implemented workspace directories (`workspace/`) for each chat as writable areas for agent operations, excluded from git via .gitignore.
+- Built JSONL message storage with append-only `messages.jsonl` files for efficient message logging and streaming.
+- Implemented git commit service with automatic commits on project/roadmap/chat/message updates, including snapshot tagging support.
+- Created bidirectional DB↔git synchronization bridge (`apps/backend/src/services/gitSync.ts`) that syncs database updates to git storage.
+- Added template version tracking with timestamp-based versioning in template JSON files.
+- Implemented `dbGetRoadmap` function in projectRepository for direct roadmap lookups by ID.
+- Created Fastify plugin (`apps/backend/src/plugins/gitStorage.ts`) to register GitStorage and GitSync services on the server instance.
+- Added `PROJECTS_ROOT` environment variable (defaults to `data/projects/`) for configurable git storage location.
+- Created comprehensive test suite (`apps/backend/src/__tests__/gitStorage.test.ts`) with 30+ tests covering all storage operations, JSONL serialization, git commits, and full project lifecycle integration.
+- Verified git storage implementation with `pnpm --filter nexus-backend test` (87 tests passing) and `pnpm --filter nexus-frontend lint && build` (all passing).
 
 ---
 

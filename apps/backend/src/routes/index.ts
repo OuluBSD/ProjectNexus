@@ -7,6 +7,7 @@ import { projectRoutes } from "./projects";
 import { roadmapRoutes } from "./roadmaps";
 import { templateRoutes } from "./templates";
 import { terminalRoutes } from "./terminal";
+import { aiChatRoutes } from "./ai-chat";
 
 export const registerRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(authRoutes, { prefix: "/auth" });
@@ -17,4 +18,5 @@ export const registerRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(fileRoutes);
   await fastify.register(terminalRoutes);
   await fastify.register(auditRoutes);
+  await fastify.register(aiChatRoutes);
 };

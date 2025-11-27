@@ -1,4 +1,18 @@
 #!/usr/bin/env node
+import { config } from "dotenv";
+import { existsSync } from "node:fs";
+import path from "node:path";
+
+// Load config from ~/.config/agent-manager/config.env or repository .env
+const homeConfigPath = path.join(process.env.HOME || "~", ".config", "agent-manager", "config.env");
+const repoConfigPath = path.join(process.cwd(), ".env");
+
+if (existsSync(homeConfigPath)) {
+  config({ path: homeConfigPath });
+} else if (existsSync(repoConfigPath)) {
+  config({ path: repoConfigPath });
+}
+
 import { Command } from "commander";
 import { loadEnv } from "./utils/env";
 import { GitStorage } from "./services/gitStorage";
@@ -6,7 +20,6 @@ import * as pgAuthRepo from "./services/authRepository";
 import * as jsonAuthRepo from "./services/jsonAuthRepository";
 import * as projectRepo from "./services/projectRepository";
 import { JsonDatabase } from "./services/jsonDatabase";
-import path from "node:path";
 import fs from "node:fs/promises";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";

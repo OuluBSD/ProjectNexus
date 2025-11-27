@@ -983,6 +983,8 @@ export default function Page() {
       setSelectedChatId(null);
       syncUrlSelection(null, null, null);
       if (typeof window !== "undefined") {
+        localStorage.removeItem("sessionToken");
+        localStorage.removeItem("username");
         localStorage.removeItem(PROJECT_STORAGE_KEY);
         localStorage.removeItem(ROADMAP_STORAGE_KEY);
         localStorage.removeItem(CHAT_STORAGE_KEY);
@@ -1288,13 +1290,7 @@ export default function Page() {
   );
 
   const handleLogout = useCallback(() => {
-    setSessionToken(null);
-    setActiveUser(null);
     clearWorkspaceState("Logged out");
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("sessionToken");
-      localStorage.removeItem("username");
-    }
   }, [clearWorkspaceState]);
 
   // Check for stored session token or auto-login with demo credentials

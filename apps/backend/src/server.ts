@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { migrateUserConfig } from "./utils/configMigration.js";
 
 // Load .env from repository root or ~/.config/agent-manager/config.env
 const __filename = fileURLToPath(import.meta.url);
@@ -9,10 +10,18 @@ const __dirname = path.dirname(__filename);
 const homeConfigPath = path.join(process.env.HOME || "~", ".config", "agent-manager", "config.env");
 const repoConfigPath = path.resolve(__dirname, "../../../.env");
 
+// Migrate user config to add any missing defaults
+const migrated = await migrateUserConfig(homeConfigPath);
+if (migrated) {
+  console.log(`[Config] Updated ${homeConfigPath} with missing defaults`);
+}
+
 // Prefer user config, fallback to repo .env
 if (existsSync(homeConfigPath)) {
+  console.log(`[Config] Loading configuration from ${homeConfigPath}`);
   config({ path: homeConfigPath });
 } else {
+  console.log(`[Config] Loading configuration from ${repoConfigPath}`);
   config({ path: repoConfigPath });
 }
 import Fastify from "fastify";

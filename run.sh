@@ -56,7 +56,8 @@ case "$mode" in
       source "$CONFIG_FILE"
       set +a
     fi
-    (cd "$ROOT" && "${frontend_cmd[@]}")
+    # Force Next.js to use port 3000 (backend uses PORT=3001)
+    (cd "$ROOT" && PORT=3000 "${frontend_cmd[@]}")
     ;;
   both)
     echo "Starting backend + frontend..."
@@ -71,7 +72,8 @@ case "$mode" in
     (cd "$ROOT" && "${backend_cmd[@]}") &
     backend_pid=$!
     trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
-    (cd "$ROOT" && "${frontend_cmd[@]}")
+    # Force Next.js to use port 3000 (backend uses PORT=3001)
+    (cd "$ROOT" && PORT=3000 "${frontend_cmd[@]}")
     wait "$backend_pid"
     ;;
   *)

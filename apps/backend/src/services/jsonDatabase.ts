@@ -77,7 +77,21 @@ export class JsonDatabase {
     const filePath = path.join(this.dbDir, "users.json");
     try {
       const content = await fs.readFile(filePath, "utf-8");
-      const rawUsers = JSON.parse(content) as any[];
+
+      if (!content.trim()) {
+        return []; // Return empty array if file is empty
+      }
+
+      let rawUsers: any[];
+      try {
+        rawUsers = JSON.parse(content) as any[];
+      } catch (parseError) {
+        console.error(`Error parsing JSON from ${filePath}:`, parseError);
+        console.error(`Content that failed to parse:`, content.substring(0, 100) + "...");
+        throw new Error(
+          `Invalid JSON in ${filePath}: ${parseError instanceof Error ? parseError.message : "Unknown error"}`
+        );
+      }
 
       // Convert date strings to Date objects
       const users = rawUsers.map((u) => ({
@@ -118,7 +132,21 @@ export class JsonDatabase {
     const filePath = path.join(this.dbDir, "sessions.json");
     try {
       const content = await fs.readFile(filePath, "utf-8");
-      const rawSessions = JSON.parse(content) as any[];
+
+      if (!content.trim()) {
+        return []; // Return empty array if file is empty
+      }
+
+      let rawSessions: any[];
+      try {
+        rawSessions = JSON.parse(content) as any[];
+      } catch (parseError) {
+        console.error(`Error parsing JSON from ${filePath}:`, parseError);
+        console.error(`Content that failed to parse:`, content.substring(0, 100) + "...");
+        throw new Error(
+          `Invalid JSON in ${filePath}: ${parseError instanceof Error ? parseError.message : "Unknown error"}`
+        );
+      }
 
       // Convert date strings to Date objects
       const sessions = rawSessions.map((s) => ({

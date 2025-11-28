@@ -48,10 +48,26 @@ case "$mode" in
     ;;
   frontend)
     echo "Starting frontend (http://localhost:3000)..."
+    # Ensure environment variables are available to frontend
+    if [ -f "$CONFIG_FILE" ]; then
+      # Source the config file to make variables available
+      set -a
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+      set +a
+    fi
     (cd "$ROOT" && "${frontend_cmd[@]}")
     ;;
   both)
     echo "Starting backend + frontend..."
+    # Ensure environment variables are available to both processes
+    if [ -f "$CONFIG_FILE" ]; then
+      # Source the config file to make variables available
+      set -a
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+      set +a
+    fi
     (cd "$ROOT" && "${backend_cmd[@]}") &
     backend_pid=$!
     trap 'kill "$backend_pid" 2>/dev/null || true' EXIT

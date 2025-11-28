@@ -3240,7 +3240,7 @@ export default function Page() {
     <>
       <TopMenuBar currentSection={currentSection} onSectionChange={setCurrentSection} />
       {currentSection === "ai-chat" ? (
-        <AIChat />
+        <AIChat sessionToken={sessionToken || undefined} />
       ) : (
         <main className="page">
           <FileDialog isOpen={isFileDialogOpen} onClose={() => setIsFileDialogOpen(false)} />

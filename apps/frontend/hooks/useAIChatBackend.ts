@@ -220,6 +220,28 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
           // Tool execution notification
           setStatusMessage(`Executing ${msg.tools?.length || 0} tool(s)...`);
           break;
+
+        case "completion_stats":
+          // Response completed - finalize streaming if still active
+          if (isStreaming && streamingContent) {
+            const assistantMessage: ChatMessage = {
+              id: nextMessageId.current++,
+              role: "assistant",
+              content: streamingContent,
+              timestamp: Date.now(),
+            };
+            setMessages((prev) => [...prev, assistantMessage]);
+            setStreamingContent("");
+          }
+          setIsStreaming(false);
+          setStatus("idle");
+          setStatusMessage("Ready");
+          break;
+
+        case "info":
+          // Info messages (e.g., tool execution results)
+          setStatusMessage(msg.message || "");
+          break;
       }
     },
     [isStreaming, streamingContent]

@@ -403,6 +403,57 @@ AI Integration Implementation:
 
 ---
 
+## New Requirements
+
+### Assistant Challenge Option
+
+- [ ] Add a configuration option (on by default) that allows the assistant to challenge the user instead of always agreeing. This will enhance critical thinking and prevent the assistant from blindly accepting incorrect statements.
+
+### Tasklist Scheduler
+
+- [ ] Implement a scheduler that can assign different types of tasks to different days:
+  - [ ] Weekdays for "create new code"
+  - [ ] Weekdays for "fix build issues"
+  - [ ] Weekdays for "fix testing issues"
+  - [ ] Weekdays for "fix user experience (requires user)"
+- [ ] Implement "requires operator presence" flag for tasks that need human intervention
+- [ ] Ensure operator tasks are distributed across different days rather than clustered together
+
+### New UI Tabs
+
+- [ ] Implement "Calendar" tab in top menu bar
+- [ ] Implement "Operators" tab in top menu bar
+- [ ] Implement "Management" tab (admin only) in top menu bar
+
+### Calendar Tab Features
+
+- [ ] Display scheduled tasks from all projects/tasklists/tasks
+- [ ] Highlight tasks that require operator presence
+- [ ] Show operator list and operator availability calendar
+- [ ] Provide scheduling overview to ensure operator scheduling is reasonable
+
+### Operator Tab Features
+
+- [ ] Create operator management interface
+- [ ] Allow creating and deleting operators
+- [ ] Handle association of user accounts to operators
+- [ ] Implement operator role management (operator != user_account)
+- [ ] Support multiple accounts per operator
+
+### Management Tab Features
+
+- [ ] Create user account management interface
+- [ ] Implement admin-only visibility for management tab
+- [ ] Allow user account creation, modification, and deletion
+
+### View Adjustability
+
+- [ ] Implement different views for admin vs. regular users
+- [ ] Ensure calendar and operator views have extended functionality for admins
+- [ ] Provide appropriate access controls based on user roles
+
+---
+
 ## 15. CLI Management Tool (nexus-cli)
 
 - [x] Basic CLI structure with Commander.js

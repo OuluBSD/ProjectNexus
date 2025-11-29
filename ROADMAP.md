@@ -182,6 +182,57 @@ The system should grow organically, adapting to insights gathered from actual us
 
 ---
 
-## 6. Roadmap Status
+## 6. New Requirements
+
+### 6.1 Assistant Challenge Option
+
+- Implement a configuration option (on by default) that allows the assistant to challenge the user instead of always agreeing. This will enhance critical thinking and prevent the assistant from blindly accepting incorrect statements.
+
+### 6.2 Tasklist Scheduler
+
+- Implement a scheduler that can assign different types of tasks to different days:
+  - Weekdays for "create new code"
+  - Weekdays for "fix build issues"
+  - Weekdays for "fix testing issues"
+  - Weekdays for "fix user experience (requires user)"
+- Implement "requires operator presence" flag for tasks that need human intervention
+- Ensure operator tasks are distributed across different days rather than clustered together
+
+### 6.3 New UI Tabs
+
+- Implement "Calendar" tab in top menu bar
+- Implement "Operators" tab in top menu bar
+- Implement "Management" tab (admin only) in top menu bar
+
+### 6.4 Calendar Tab Features
+
+- Display scheduled tasks from all projects/tasklists/tasks
+- Highlight tasks that require operator presence
+- Show operator list and operator availability calendar
+- Provide scheduling overview to ensure operator scheduling is reasonable
+
+### 6.5 Operator Tab Features
+
+- Create operator management interface
+- Allow creating and deleting operators
+- Handle association of user accounts to operators
+- Implement operator role management (operator != user_account)
+- Support multiple accounts per operator
+
+### 6.6 Management Tab Features
+
+- Create user account management interface
+- Implement admin-only visibility for management tab
+- Allow user account creation, modification, and deletion
+
+### 6.7 View Adjustability
+
+- Implement different views for admin vs. regular users
+- Ensure calendar and operator views have extended functionality for admins
+- Provide appropriate access controls based on user roles
+
+---
+
+## 7. Roadmap Status
 
 This roadmap is a living document. Items will shift, merge, or disappear as Project Nexus matures and real-world feedback shapes the system's trajectory.

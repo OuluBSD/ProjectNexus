@@ -10,6 +10,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+const DEFAULT_REPO_DIR =
+  process.env.AGENT_MANAGER_REPO_DIR ||
+  (process.env.HOME ? path.join(process.env.HOME, "Dev", "Manager") : "./");
+
 interface ConfigDefault {
   key: string;
   value: string;
@@ -22,8 +26,30 @@ const CONFIG_DEFAULTS: ConfigDefault[] = [
   // Server configuration
   { key: "HOST", value: "0.0.0.0", section: "Server configuration" },
   { key: "PORT", value: "3001", section: "Server configuration" },
+  { key: "LOCAL_MANAGER_HOST", value: "127.0.0.1", section: "Server configuration" },
+  { key: "LOCAL_MANAGER_PORT", value: "4301", section: "Server configuration" },
+  { key: "LOCAL_WORKER_PORT", value: "4302", section: "Server configuration" },
+  { key: "LOCAL_AI_PORT", value: "4303", section: "Server configuration" },
+  {
+    key: "LOCAL_WORKER_REPO",
+    value: "./projects/ai-chat",
+    comment: "Path to local worker workspace (git repo root)",
+    section: "Server configuration",
+  },
+  {
+    key: "DEFAULT_AI_MODEL",
+    value: "qwen-2.5-flash",
+    comment: "Default model used by auto-created local AI server",
+    section: "Server configuration",
+  },
 
   // Database configuration
+  {
+    key: "AGENT_MANAGER_REPO_DIR",
+    value: DEFAULT_REPO_DIR,
+    comment: "Root directory for JSON database and git-backed storage",
+    section: "Database configuration",
+  },
   {
     key: "DATABASE_TYPE",
     value: "json",

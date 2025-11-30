@@ -150,3 +150,40 @@ export const auditEvents = pgTable(
     auditCreatedAtIdx: index("audit_events_created_at_idx").on(table.createdAt),
   })
 );
+
+// Server management tables for multi-server architecture
+export const servers = pgTable("servers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull(),
+  type: varchar("type", { length: 32 }).notNull(), // "worker" | "manager" | "ai"
+  host: varchar("host", { length: 255 }).notNull(),
+  port: integer("port").notNull(),
+  status: varchar("status", { length: 32 }).default("offline"), // "online" | "offline" | "degraded"
+  metadata: jsonb("metadata"), // Additional server config, capabilities, etc.
+  lastHealthCheck: timestamp("last_health_check"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const chatAssignments = pgTable("chat_assignments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  chatId: uuid("chat_id")
+    .references(() => chats.id, { onDelete: "cascade" })
+    .notNull(),
+  serverId: uuid("server_id")
+    .references(() => servers.id, { onDelete: "cascade" })
+    .notNull(),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+});
+
+export const projectWorkspaces = pgTable("project_workspaces", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" })
+    .notNull(),
+  serverId: uuid("server_id")
+    .references(() => servers.id, { onDelete: "cascade" })
+    .notNull(),
+  workspacePath: text("workspace_path").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

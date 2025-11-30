@@ -38,8 +38,19 @@ echo "TERMINAL_IDLE_MS=${TERMINAL_IDLE_MS} (set to 0 to disable idle shutdowns)"
 
 backend_cmd=(pnpm --filter nexus-backend dev)
 frontend_cmd=(pnpm --filter nexus-frontend dev)
+manager_cmd=(node "$ROOT/scripts/local-manager-server.js")
 
-mode="${1:-both}"
+mode="${1:-all}"
+
+cleanup_pids=()
+
+cleanup() {
+  for pid in "${cleanup_pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+}
 
 case "$mode" in
   backend)
@@ -59,8 +70,12 @@ case "$mode" in
     # Force Next.js to use port 3000 (backend uses PORT=3001)
     (cd "$ROOT" && PORT=3000 "${frontend_cmd[@]}")
     ;;
-  both)
-    echo "Starting backend + frontend..."
+  manager)
+    echo "Starting local manager server (http://${LOCAL_MANAGER_HOST:-127.0.0.1}:${LOCAL_MANAGER_PORT:-4301})..."
+    (cd "$ROOT" && "${manager_cmd[@]}")
+    ;;
+  servers|both|all)
+    echo "Starting backend + manager + frontend..."
     # Ensure environment variables are available to both processes
     if [ -f "$CONFIG_FILE" ]; then
       # Source the config file to make variables available
@@ -69,15 +84,24 @@ case "$mode" in
       source "$CONFIG_FILE"
       set +a
     fi
+    (cd "$ROOT" && "${manager_cmd[@]}") &
+    manager_pid=$!
+    cleanup_pids+=("$manager_pid")
+
     (cd "$ROOT" && "${backend_cmd[@]}") &
     backend_pid=$!
-    trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+    cleanup_pids+=("$backend_pid")
+    trap cleanup EXIT
+
     # Force Next.js to use port 3000 (backend uses PORT=3001)
-    (cd "$ROOT" && PORT=3000 "${frontend_cmd[@]}")
-    wait "$backend_pid"
+    (cd "$ROOT" && PORT=3000 "${frontend_cmd[@]}") &
+    frontend_pid=$!
+    cleanup_pids+=("$frontend_pid")
+
+    wait
     ;;
   *)
-    echo "Usage: $0 [backend|frontend|both]"
+    echo "Usage: $0 [backend|frontend|manager|servers|both|all]"
     exit 1
     ;;
 esac

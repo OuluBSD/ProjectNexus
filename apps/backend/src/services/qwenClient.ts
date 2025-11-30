@@ -106,6 +106,7 @@ export interface QwenClientConfig {
   qwenPath?: string; // Path to qwen-code CLI script (defaults to ~/Dev/qwen-code/script/qwen-code)
   mode?: QwenMode; // Communication mode: stdio or tcp (default: stdio)
   tcpPort?: number; // TCP port (defaults to 7777, only used in TCP mode)
+  tcpHost?: string; // TCP host (defaults to localhost)
   workspaceRoot?: string; // Workspace directory for qwen
   model?: string; // Model to use (e.g., 'qwen-2.5-flash')
   autoStart?: boolean; // Auto-start qwen process on connect (default: true)
@@ -182,6 +183,7 @@ export class QwenClient {
       qwenPath: config.qwenPath ?? `${homeDir}/Dev/qwen-code/script/qwen-code`,
       mode: config.mode ?? "stdio",
       tcpPort: config.tcpPort ?? 7777,
+      tcpHost: config.tcpHost ?? "127.0.0.1",
       workspaceRoot: config.workspaceRoot ?? process.cwd(),
       model: config.model ?? "qwen-2.5-flash",
       autoStart: config.autoStart ?? true,
@@ -283,13 +285,18 @@ export class QwenClient {
 
     // Connect to TCP server
     return new Promise<void>((resolve, reject) => {
-      console.log(`[QwenClient] Connecting to TCP port ${this.config.tcpPort}...`);
+      console.log(
+        `[QwenClient] Connecting to TCP host ${this.config.tcpHost} port ${this.config.tcpPort}...`
+      );
 
-      this.socket = net.createConnection({ port: this.config.tcpPort, host: "localhost" }, () => {
-        console.log(`[QwenClient] Connected to qwen TCP server`);
-        this.connected = true;
-        resolve();
-      });
+      this.socket = net.createConnection(
+        { port: this.config.tcpPort, host: this.config.tcpHost },
+        () => {
+          console.log(`[QwenClient] Connected to qwen TCP server`);
+          this.connected = true;
+          resolve();
+        }
+      );
 
       this.socket.on("data", (data) => {
         this.handleData(data);

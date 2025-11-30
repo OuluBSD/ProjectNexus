@@ -938,3 +938,216 @@ body {
   font-size: 13px;
   opacity: 0.7;
 }
+
+/* Network View */
+.network-view {
+  display: flex;
+  height: calc(100vh - 48px);
+  background: var(--bg);
+}
+
+.network-sidebar {
+  width: 320px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.network-sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.network-sidebar-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.network-add-form {
+  margin: 12px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.network-add-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.network-add-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.network-add-form input,
+.network-add-form select {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.network-add-form input:focus,
+.network-add-form select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.network-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.network-inline-error {
+  color: #ef4444;
+  font-size: 13px;
+}
+
+.network-server-sections {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.network-server-section {
+  margin-bottom: 16px;
+}
+
+.network-server-section h3 {
+  margin: 0 0 8px 0;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.network-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.network-server-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--card);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.network-server-item:hover {
+  background: var(--ghost);
+}
+
+.network-server-item.selected {
+  background: rgba(14, 165, 233, 0.2);
+  border: 1px solid var(--accent);
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.server-name {
+  font-weight: 500;
+}
+
+.network-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.network-server-details {
+  max-width: 800px;
+}
+
+.network-server-details h2 {
+  margin: 0 0 24px 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.server-info {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row label {
+  width: 100px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.info-row input {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.info-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.info-row span {
+  flex: 1;
+}
+
+.server-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.network-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  font-size: 16px;
+}

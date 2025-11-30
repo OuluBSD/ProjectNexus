@@ -51,6 +51,7 @@ import { Login } from "../../components/Login";
 import { useMetaChatWebSocket } from "../../hooks/useMetaChatWebSocket";
 import { TopMenuBar, type AppSection } from "../../components/TopMenuBar";
 import { AIChat } from "../../components/AIChat";
+import { Network } from "../../components/Network";
 
 type Status =
   | "inactive"
@@ -3241,6 +3242,8 @@ export default function Page() {
       <TopMenuBar currentSection={currentSection} onSectionChange={setCurrentSection} />
       {currentSection === "ai-chat" ? (
         <AIChat sessionToken={sessionToken || undefined} />
+      ) : currentSection === "network" ? (
+        <Network sessionToken={sessionToken || undefined} />
       ) : (
         <main className="page">
           <FileDialog isOpen={isFileDialogOpen} onClose={() => setIsFileDialogOpen(false)} />

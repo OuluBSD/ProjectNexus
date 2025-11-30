@@ -8,13 +8,52 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Also get the real path (resolving symlinks)
 REAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Optional configuration file (mirrors run.sh)
+CONFIG_FILE="$HOME/.config/agent-manager/config.env"
 
 echo "=== AgentManager Process Killer ==="
 echo "Script directory: $SCRIPT_DIR"
 if [ "$SCRIPT_DIR" != "$REAL_DIR" ]; then
     echo "Real directory:   $REAL_DIR"
 fi
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Loading configuration from $CONFIG_FILE"
+    set -a
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+    set +a
+fi
 echo
+
+BACKEND_PORT=${PORT:-3001}
+FRONTEND_PORT=${PORT_FRONTEND:-3000}
+MANAGER_PORT=${LOCAL_MANAGER_PORT:-4301}
+WORKER_PORT=${LOCAL_WORKER_PORT:-4302}
+AI_PORT=${LOCAL_AI_PORT:-4303}
+
+# Helper to find processes by listening port (TCP)
+find_port_pids() {
+    local port="$1"
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | tr '\n' ' '
+    elif command -v ss >/dev/null 2>&1; then
+        ss -ltnp 2>/dev/null | awk -v p=":$port" '$4 ~ p {print $6}' | sed 's/[^0-9]//g' | tr '\n' ' '
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -ltnp 2>/dev/null | awk -v p=":$port" '$4 ~ p {print $7}' | sed 's/[^0-9]//g' | tr '\n' ' '
+    else
+        echo ""
+    fi
+}
+
+# Accumulate PIDs with reasons in an associative array for deduplication
+declare -A PID_MAP=()
+add_pid() {
+    local pid="$1"
+    local reason="$2"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        PID_MAP["$pid"]="$reason"
+    fi
+}
 
 # Kill orphaned qwen processes using PID file
 QWEN_PID_FILE="$HOME/.config/agent-manager/qwen.pid"
@@ -38,34 +77,57 @@ fi
 
 # Find PIDs of node processes in this directory (check both paths in case of symlinks)
 if [ "$SCRIPT_DIR" != "$REAL_DIR" ]; then
-    PIDS=$(ps aux | grep node | grep -E "($SCRIPT_DIR|$REAL_DIR)" | grep -v grep | grep -v "kill.sh" | awk '{print $2}')
+    while read -r pid; do
+        add_pid "$pid" "node@repo"
+    done < <(ps aux | grep node | grep -E "($SCRIPT_DIR|$REAL_DIR)" | grep -v grep | grep -v "kill.sh" | awk '{print $2}')
 else
-    PIDS=$(ps aux | grep node | grep "$SCRIPT_DIR" | grep -v grep | grep -v "kill.sh" | awk '{print $2}')
+    while read -r pid; do
+        add_pid "$pid" "node@repo"
+    done < <(ps aux | grep node | grep "$SCRIPT_DIR" | grep -v grep | grep -v "kill.sh" | awk '{print $2}')
 fi
 
-if [ -z "$PIDS" ]; then
+# Find processes bound to the known ports (frontend, backend, manager, worker, ai)
+PORT_TARGETS=(
+    "$FRONTEND_PORT:frontend"
+    "$BACKEND_PORT:backend"
+    "$MANAGER_PORT:manager"
+    "$WORKER_PORT:worker"
+    "$AI_PORT:ai-server"
+)
+if [ "${QWEN_MODE:-}" = "tcp" ]; then
+    PORT_TARGETS+=("${QWEN_TCP_PORT:-7777}:qwen-tcp")
+fi
+
+for target in "${PORT_TARGETS[@]}"; do
+    IFS=":" read -r port label <<<"$target"
+    if [ -z "$port" ]; then
+        continue
+    fi
+    for pid in $(find_port_pids "$port"); do
+        add_pid "$pid" "$label@port:$port"
+    done
+done
+
+# Convert PIDs to array
+PID_ARRAY=("${!PID_MAP[@]}")
+
+if [ ${#PID_ARRAY[@]} -eq 0 ]; then
     echo "No matching processes found."
     exit 0
 fi
 
 echo "Found processes:"
-if [ "$SCRIPT_DIR" != "$REAL_DIR" ]; then
-    ps aux | grep node | grep -E "($SCRIPT_DIR|$REAL_DIR)" | grep -v grep | grep -v "kill.sh" || true
-else
-    ps aux | grep node | grep "$SCRIPT_DIR" | grep -v grep | grep -v "kill.sh" || true
-fi
-echo
-
-# Convert PIDs to array
-PID_ARRAY=($PIDS)
-echo "PIDs to terminate: ${PID_ARRAY[@]}"
+ps -fp "${PID_ARRAY[@]}" || true
+for pid in "${PID_ARRAY[@]}"; do
+    printf "  PID %s -> %s\n" "$pid" "${PID_MAP[$pid]}"
+done
 echo
 
 # Send SIGTERM to all processes
 echo "Sending SIGTERM to processes..."
 for pid in "${PID_ARRAY[@]}"; do
     if kill -0 "$pid" 2>/dev/null; then
-        echo "  Terminating PID $pid"
+        echo "  Terminating PID $pid (${PID_MAP[$pid]})"
         kill -TERM "$pid" 2>/dev/null || true
     fi
 done

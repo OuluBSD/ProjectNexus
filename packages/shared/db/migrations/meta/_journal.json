@@ -29,6 +29,13 @@
       "when": 1764187303332,
       "tag": "0003_meta_chat_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764365252002,
+      "tag": "0004_certain_vertigo",
+      "breakpoints": true
     }
   ]
 }

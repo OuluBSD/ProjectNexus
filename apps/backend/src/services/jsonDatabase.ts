@@ -5,13 +5,19 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { users as usersSchema, sessions as sessionsSchema } from "@nexus/shared/db/schema";
+import type {
+  users as usersSchema,
+  sessions as sessionsSchema,
+  servers as serversSchema,
+} from "@nexus/shared/db/schema";
 
 // Types matching the database schema
 export type User = typeof usersSchema.$inferSelect;
 export type Session = typeof sessionsSchema.$inferSelect;
 export type NewUser = typeof usersSchema.$inferInsert;
 export type NewSession = typeof sessionsSchema.$inferInsert;
+export type Server = typeof serversSchema.$inferSelect;
+export type NewServer = typeof serversSchema.$inferInsert;
 
 interface JsonDatabaseOptions {
   dataDir: string;
@@ -38,6 +44,7 @@ export class JsonDatabase {
   // Caches
   private usersCache = new Map<string, CacheEntry<User>>();
   private sessionsCache = new Map<string, CacheEntry<Session>>();
+  private serversCache = new Map<string, CacheEntry<Server>>();
   private dirty = new Set<string>(); // Track which collections need to be written
 
   constructor(options: JsonDatabaseOptions) {
@@ -56,6 +63,7 @@ export class JsonDatabase {
     // Create default files if they don't exist
     const usersFile = path.join(this.dbDir, "users.json");
     const sessionsFile = path.join(this.dbDir, "sessions.json");
+    const serversFile = path.join(this.dbDir, "servers.json");
 
     try {
       await fs.access(usersFile);
@@ -67,6 +75,12 @@ export class JsonDatabase {
       await fs.access(sessionsFile);
     } catch {
       await fs.writeFile(sessionsFile, JSON.stringify([], null, 2));
+    }
+
+    try {
+      await fs.access(serversFile);
+    } catch {
+      await fs.writeFile(serversFile, JSON.stringify([], null, 2));
     }
   }
 
@@ -376,6 +390,160 @@ export class JsonDatabase {
   }
 
   // ============================================================================
+  // Server Operations
+  // ============================================================================
+
+  /**
+   * Read servers from file with caching
+   */
+  private async readServers(): Promise<Server[]> {
+    const filePath = path.join(this.dbDir, "servers.json");
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+
+      if (!content.trim()) {
+        return [];
+      }
+
+      let rawServers: any[];
+      try {
+        rawServers = JSON.parse(content) as any[];
+      } catch (parseError) {
+        console.error(`Error parsing JSON from ${filePath}:`, parseError);
+        throw new Error(`Invalid JSON in ${filePath}`);
+      }
+
+      // Convert date strings to Date objects
+      const servers = rawServers.map((s) => ({
+        ...s,
+        lastHealthCheck: s.lastHealthCheck ? new Date(s.lastHealthCheck) : null,
+        createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
+        updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date(),
+      })) as Server[];
+
+      // Update cache
+      for (const server of servers) {
+        this.serversCache.set(server.id, {
+          data: server,
+          timestamp: Date.now(),
+        });
+      }
+
+      return servers;
+    } catch (err: any) {
+      if (err.code === "ENOENT") {
+        return [];
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Write servers to file
+   */
+  private async writeServers(servers: Server[]): Promise<void> {
+    const filePath = path.join(this.dbDir, "servers.json");
+    await fs.writeFile(filePath, JSON.stringify(servers, null, 2));
+    this.dirty.delete("servers");
+  }
+
+  async listServers(): Promise<Server[]> {
+    return await this.readServers();
+  }
+
+  async getServerById(id: string): Promise<Server | null> {
+    // Check cache first
+    const cached = this.serversCache.get(id);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+
+    // Read from file
+    const servers = await this.readServers();
+    const server = servers.find((s) => s.id === id);
+
+    if (server) {
+      this.serversCache.set(id, { data: server, timestamp: Date.now() });
+      this.trimCache(this.serversCache);
+    }
+
+    return server || null;
+  }
+
+  async createServer(data: Partial<NewServer>): Promise<Server> {
+    const servers = await this.readServers();
+
+    const server: Server = {
+      id: crypto.randomUUID(),
+      name: data.name || "Unnamed Server",
+      type: data.type || "worker",
+      host: data.host || "localhost",
+      port: data.port || 3002,
+      status: data.status || "offline",
+      metadata: data.metadata || null,
+      lastHealthCheck: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    servers.push(server);
+    await this.writeServers(servers);
+
+    // Update cache
+    this.serversCache.set(server.id, { data: server, timestamp: Date.now() });
+    this.trimCache(this.serversCache);
+
+    return server;
+  }
+
+  async updateServer(id: string, data: Partial<NewServer>): Promise<Server | null> {
+    const servers = await this.readServers();
+    const index = servers.findIndex((s) => s.id === id);
+
+    if (index === -1) {
+      return null;
+    }
+
+    const updated: Server = {
+      ...servers[index],
+      ...data,
+      id: servers[index].id, // Preserve ID
+      updatedAt: new Date(),
+    };
+
+    servers[index] = updated;
+    await this.writeServers(servers);
+
+    // Update cache
+    this.serversCache.set(id, { data: updated, timestamp: Date.now() });
+
+    return updated;
+  }
+
+  async deleteServer(id: string): Promise<boolean> {
+    const servers = await this.readServers();
+    const filtered = servers.filter((s) => s.id !== id);
+
+    if (filtered.length === servers.length) {
+      return false; // Server not found
+    }
+
+    await this.writeServers(filtered);
+    this.serversCache.delete(id);
+    return true;
+  }
+
+  async updateServerHealth(
+    id: string,
+    status: "online" | "offline" | "degraded"
+  ): Promise<Server | null> {
+    return await this.updateServer(id, {
+      status,
+      lastHealthCheck: new Date(),
+    });
+  }
+
+  // ============================================================================
   // Cache Management
   // ============================================================================
 
@@ -385,6 +553,7 @@ export class JsonDatabase {
   clearCache(): void {
     this.usersCache.clear();
     this.sessionsCache.clear();
+    this.serversCache.clear();
   }
 
   /**
@@ -406,6 +575,10 @@ export class JsonDatabase {
       },
       sessions: {
         size: this.sessionsCache.size,
+        maxSize: this.maxCacheSize,
+      },
+      servers: {
+        size: this.serversCache.size,
         maxSize: this.maxCacheSize,
       },
       ttl: this.cacheTTL,

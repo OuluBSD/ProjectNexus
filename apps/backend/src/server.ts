@@ -35,6 +35,7 @@ import { qwenPlugin } from "./plugins/qwen.js";
 import { purgeExpiredSessions as pgPurgeExpiredSessions } from "./services/authRepository";
 import { purgeExpiredSessions as jsonPurgeExpiredSessions } from "./services/jsonAuthRepository";
 import { setupUsersFromEnv } from "./utils/setupUsers";
+import { ensureLocalServerTopology } from "./utils/serverBootstrap.js";
 
 async function start() {
   const env = loadEnv(process.env);
@@ -53,6 +54,8 @@ async function start() {
   app.addHook("onReady", async () => {
     // Setup users from environment if configured
     await setupUsersFromEnv(app.db, app.jsonDb, process.env, app.log);
+    // Ensure baseline local manager/worker/AI servers exist
+    await ensureLocalServerTopology(app);
 
     // Start session cleanup timer
     if ((app.db || app.jsonDb) && !sessionCleanup) {

@@ -259,6 +259,15 @@ const projectThemePresets = {
     muted: "#c4b5fd",
     ghost: "#090611",
   },
+  ice: {
+    panel: "#0b1224",
+    card: "#0f1a30",
+    accent: "#38bdf8",
+    border: "#0ea5e9",
+    text: "#e0f2fe",
+    muted: "#94a3b8",
+    ghost: "#0b1224",
+  },
   ember: {
     panel: "#1b0e04",
     card: "#2c1404",
@@ -282,6 +291,7 @@ type ProjectThemePresetKey = keyof typeof projectThemePresets;
 const projectThemePresetLabels: Record<ProjectThemePresetKey, string> = {
   default: "Default",
   nebula: "Nebula",
+  ice: "Ice",
   ember: "Ember",
   forest: "Forest",
 };
@@ -349,8 +359,7 @@ const demoSeeds: {
       name: "Automatic Demo",
       category: "Demo",
       status: "active",
-      description:
-        "Dedicated demo workspace at /workspace/auto-demo/qwen-backend with git enabled for backend agent flows.",
+      description: `Dedicated demo workspace at ${autoDemoWorkspace.path} with git enabled for backend agent flows.`,
       theme: projectThemePresets.ice,
     },
     roadmap: {
@@ -376,8 +385,7 @@ const demoSeeds: {
         starterMessages: [
           {
             role: "assistant",
-            content:
-              "✦ I need to stage the modified file that is not staged yet:\n\n```bash\n# Shell\ncd /workspace/auto-demo/qwen-backend\n2 git status --short\n4 git add uppsrc/Qwen/QwenTCPServer.cpp\n```",
+            content: `✦ I need to stage the modified file that is not staged yet:\n\n\`\`\`bash\n# Shell\ncd ${autoDemoWorkspace.path}\n2 git status --short\n4 git add uppsrc/Qwen/QwenTCPServer.cpp\n\`\`\``,
           },
           {
             role: "assistant",
@@ -402,8 +410,7 @@ const demoSeeds: {
         starterMessages: [
           {
             role: "assistant",
-            content:
-              "✦ Setting up the auto-demo workspace and manager/server links:\n\n```bash\n# Shell\ncd /workspace/auto-demo/qwen-backend\nls -la\n```\n\nAttached: manager, server, ai-chat and git repo.",
+            content: `✦ Setting up the auto-demo workspace and manager/server links:\n\n\`\`\`bash\n# Shell\ncd ${autoDemoWorkspace.path}\nls -la\n\`\`\`\n\nAttached: manager, server, ai-chat and git repo.`,
           },
           {
             role: "assistant",
@@ -435,14 +442,13 @@ const qwenCliPreview: DemoStep[] = [
     items: [
       {
         kind: "text",
-        content:
-          "The new auto chat seeds with links to the manager, backend server, and AI chat and starts writing into /workspace/auto-demo/qwen-backend.",
+        content: `The new auto chat seeds with links to the manager, backend server, and AI chat and starts writing into ${autoDemoWorkspace.path}.`,
       },
       {
         kind: "command",
         title: "Shell prepare FS API stub",
         content: [
-          "cd /workspace/auto-demo/qwen-backend",
+          `cd ${autoDemoWorkspace.path}`,
           "mkdir -p api",
           "cat <<'EOF' > api/fs_api.cpp",
           "#include <string>",
@@ -736,10 +742,6 @@ export default function Page() {
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
-  const autoDemoSeed = useMemo(() => demoSeeds.find((seed) => seed.key === "auto-demo"), []);
-  const autoDemoChatLabel =
-    autoDemoSeed?.chats.map((chat) => chat.title).join(", ") ?? "Wire Qwen backend";
-  const autoDemoRoadmapTitle = autoDemoSeed?.roadmap.title ?? "Qwen Backend";
   const resolveChatFolder = useCallback(
     (chat?: ChatItem | null) => {
       if (!chat) return null;
@@ -961,6 +963,15 @@ export default function Page() {
       setAutoDemoLog(autoDemoStatusMessage);
     }
   }, [autoDemoAiEnabled, autoDemoStatusMessage]);
+
+  useEffect(() => {
+    if (!isAutoDemoChat && autoDemoAiEnabled) {
+      disconnectAutoDemo();
+      setAutoDemoAiEnabled(false);
+      setAutoDemoKickoffSent(false);
+      setAutoDemoLog("Idle.");
+    }
+  }, [autoDemoAiEnabled, disconnectAutoDemo, isAutoDemoChat]);
 
   useEffect(() => {
     if (!autoDemoAiEnabled || autoDemoKickoffSent) return;
@@ -3126,6 +3137,11 @@ export default function Page() {
   const managerHint = resolveChatManager(selectedChat);
   const serverHint = resolveChatServer(selectedChat);
   const aiChatHint = resolveChatAiChat(selectedChat);
+  const isAutoDemoChat =
+    !!selectedChat &&
+    (readWorkspacePath(selectedChat.metadata) === autoDemoWorkspace.path ||
+      folderHint === autoDemoWorkspace.path ||
+      repoHint === autoDemoWorkspace.repo);
   const roadmapMeta = selectedRoadmapId ? metaChats[selectedRoadmapId] : null;
   const roadmapSummary = selectedRoadmapId ? roadmapStatus[selectedRoadmapId] : null;
   const siblingTasks = chats.filter((chat) => !chat.meta && chat.id && chat.id !== selectedChatId);
@@ -3453,6 +3469,116 @@ export default function Page() {
                 </span>
               )}
             </div>
+            {isAutoDemoChat && (
+              <div className="demo-inline">
+                <div className="item-line" style={{ gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div className="panel-title" style={{ marginBottom: 4 }}>
+                      Auto demo: qwen backend
+                    </div>
+                    <div className="panel-text">
+                      This chat anchors the auto-demo workspace, repo, and qwen backend so the CLI
+                      preview and live AI run stay inside the main panel.
+                    </div>
+                  </div>
+                  <div className="demo-pills">
+                    <span className="item-pill">Workspace: {autoDemoWorkspace.path}</span>
+                    <span className="item-pill">Repo: {autoDemoWorkspace.repo}</span>
+                  </div>
+                </div>
+                <div className="demo-attachments">
+                  <div className="demo-attachment">
+                    <div className="demo-attachment-label">Manager</div>
+                    <div className="demo-attachment-value">{autoDemoWorkspace.manager}</div>
+                  </div>
+                  <div className="demo-attachment">
+                    <div className="demo-attachment-label">Server</div>
+                    <div className="demo-attachment-value">{autoDemoWorkspace.server}</div>
+                  </div>
+                  <div className="demo-attachment">
+                    <div className="demo-attachment-label">AI Chat</div>
+                    <div className="demo-attachment-value">{autoDemoWorkspace.aiChat}</div>
+                  </div>
+                </div>
+                <div className="panel-text" style={{ marginTop: 6 }}>
+                  Pre-seeded CLI/diff blocks for the auto-demo:
+                </div>
+                <div className="demo-steps">
+                  {qwenCliPreview.map((step) => (
+                    <div key={step.id} className="demo-step">
+                      <div className="demo-step-headline">✦ {step.headline}</div>
+                      {step.items.map((item, index) => (
+                        <div
+                          key={`${step.id}-${index}`}
+                          className={`demo-step-item demo-step-${item.kind}`}
+                        >
+                          {item.title && (
+                            <div className="demo-step-title">
+                              {item.kind === "command" ? "✓ " : item.kind === "diff" ? "↦ " : ""}
+                              {item.title}
+                            </div>
+                          )}
+                          {renderDemoStepContent(item)}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="demo-ai-row" style={{ marginTop: 6 }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="panel-title" style={{ marginBottom: 6 }}>
+                      Live AI demo (qwen)
+                    </div>
+                    <div className="panel-text">
+                      Write and run a Python script in {autoDemoWorkspace.path} that prints 123×456
+                      via the qwen backend.
+                    </div>
+                    <div className="demo-ai-controls">
+                      <button
+                        className="tab"
+                        onClick={() => {
+                          setAutoDemoAiEnabled(true);
+                          setAutoDemoKickoffSent(false);
+                          setAutoDemoLog("Starting AI demo…");
+                        }}
+                        disabled={!sessionToken}
+                      >
+                        Run AI demo (qwen)
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() => {
+                          setAutoDemoAiEnabled(false);
+                          setAutoDemoKickoffSent(false);
+                          setAutoDemoLog("Idle.");
+                          disconnectAutoDemo();
+                        }}
+                        disabled={!autoDemoAiEnabled && !isAutoDemoConnected}
+                      >
+                        Stop
+                      </button>
+                      <span className="item-subtle">{autoDemoLog}</span>
+                    </div>
+                  </div>
+                  <div className="demo-ai-stream">
+                    <div className="demo-ai-stream-title">AI output</div>
+                    {autoDemoMessages.slice(-4).map((msg) => (
+                      <div key={msg.id} className={`demo-ai-line demo-ai-${msg.role}`}>
+                        <span className="demo-ai-role">{msg.role}:</span> {msg.content}
+                      </div>
+                    ))}
+                    {autoDemoStreaming && (
+                      <div className="demo-ai-line demo-ai-assistant">
+                        <span className="demo-ai-role">assistant:</span> {autoDemoStreaming}
+                      </div>
+                    )}
+                    {!autoDemoMessages.length && !autoDemoStreaming && (
+                      <div className="item-subtle">No output yet.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="panel-text">
               Focus:{" "}
               {selectedChat.focus || selectedChat.note || selectedChat.goal || "No focus yet."}
@@ -3851,107 +3977,6 @@ export default function Page() {
                 {statusMessage}
               </div>
             )}
-          </div>
-          <div className="panel-card demo-session-card">
-            <div
-              className="item-line"
-              style={{ gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}
-            >
-              <div style={{ flex: 1, minWidth: 260 }}>
-                <div className="panel-title" style={{ marginBottom: 4 }}>
-                  Automatic demo workspace (git-backed)
-                </div>
-                <div className="panel-text">
-                  Follow the qwen-backend in a dedicated demo project with its own folder, git repo,
-                  and chats that already start writing code.
-                </div>
-              </div>
-              <div className="demo-pills">
-                <span className="item-pill">Workspace: {autoDemoWorkspace.path}</span>
-                <span className="item-pill">Repo: {autoDemoWorkspace.repo}</span>
-                <span className="item-pill">Chats: {autoDemoChatLabel}</span>
-              </div>
-            </div>
-            <div className="demo-attachments">
-              <div className="demo-attachment">
-                <div className="demo-attachment-label">Manager</div>
-                <div className="demo-attachment-value">{autoDemoWorkspace.manager}</div>
-              </div>
-              <div className="demo-attachment">
-                <div className="demo-attachment-label">Server</div>
-                <div className="demo-attachment-value">{autoDemoWorkspace.server}</div>
-              </div>
-              <div className="demo-attachment">
-                <div className="demo-attachment-label">AI Chat</div>
-                <div className="demo-attachment-value">{autoDemoWorkspace.aiChat}</div>
-              </div>
-            </div>
-            <div className="panel-text">
-              The roadmap list now contains a <strong>{autoDemoRoadmapTitle}</strong> entry with
-              auto-chats that open on these CLI-style steps:
-            </div>
-            <div className="demo-steps">
-              {qwenCliPreview.map((step) => (
-                <div key={step.id} className="demo-step">
-                  <div className="demo-step-headline">✦ {step.headline}</div>
-                  {step.items.map((item, index) => (
-                    <div
-                      key={`${step.id}-${index}`}
-                      className={`demo-step-item demo-step-${item.kind}`}
-                    >
-                      {item.title && (
-                        <div className="demo-step-title">
-                          {item.kind === "command" ? "✓ " : item.kind === "diff" ? "↦ " : ""}
-                          {item.title}
-                        </div>
-                      )}
-                      {renderDemoStepContent(item)}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="demo-ai-row">
-              <div style={{ flex: 1 }}>
-                <div className="panel-title" style={{ marginBottom: 6 }}>
-                  Live AI demo (qwen)
-                </div>
-                <div className="panel-text">
-                  Kick off a real qwen backend session that writes a Python script in the demo repo
-                  and runs it to compute 123×456.
-                </div>
-                <div className="demo-ai-controls">
-                  <button
-                    className="tab"
-                    onClick={() => {
-                      setAutoDemoAiEnabled(true);
-                      setAutoDemoKickoffSent(false);
-                      setAutoDemoLog("Starting AI demo…");
-                    }}
-                    disabled={!sessionToken}
-                  >
-                    Run AI demo (qwen)
-                  </button>
-                  <span className="item-subtle">{autoDemoLog}</span>
-                </div>
-              </div>
-              <div className="demo-ai-stream">
-                <div className="demo-ai-stream-title">AI output</div>
-                {autoDemoMessages.slice(-4).map((msg) => (
-                  <div key={msg.id} className={`demo-ai-line demo-ai-${msg.role}`}>
-                    <span className="demo-ai-role">{msg.role}:</span> {msg.content}
-                  </div>
-                ))}
-                {autoDemoStreaming && (
-                  <div className="demo-ai-line demo-ai-assistant">
-                    <span className="demo-ai-role">assistant:</span> {autoDemoStreaming}
-                  </div>
-                )}
-                {!autoDemoMessages.length && !autoDemoStreaming && (
-                  <div className="item-subtle">No output yet.</div>
-                )}
-              </div>
-            </div>
           </div>
           <div className="columns">
             <div

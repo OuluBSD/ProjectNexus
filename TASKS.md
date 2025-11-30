@@ -312,9 +312,9 @@ AI Integration Implementation:
 
 ## Recent Notes
 
-- Extended the Automatic Demo card to seed two chats (including an FS API task) with attached manager/server/AI chat metadata, new CLI previews, and visible manager/server/AI pills alongside workspace/repo hints.
+- Embedded the auto-demo Qwen workspace flow directly into the Chat tab for the auto-demo chat (inline manager/server/AI pills, CLI/diff previews, and the qwen run button) against the `~/.config/agent-manager/auto-demo/qwen-backend` repo.
 - Styled the Agent Manager auto demo CLI preview so diff blocks render with line-level colors (add/delete/hunk/meta) for easier visual scanning.
-- Added an "Automatic Demo" workspace card in Agent Manager that seeds a git-backed Qwen backend demo project (workspace path + repo metadata) and a starter chat with CLI-style command/diff previews.
+- Seeded a git-backed Qwen backend demo project and starter chat metadata so the inline auto-demo flow has workspace/repo hints baked in.
 - Adjusted challenge mode bootstrap to send a silent system-style instruction and suppress the initial AI echo so users no longer see the setup blurb when connecting.
 - Added assistant challenge toggle (default on) flowing from env config to AI chat connections, sending a system prompt that encourages respectful pushback on unclear or risky user statements.
 - Enforced JSON status compliance by normalizing allowed statuses (`idle`, `in_progress`, `waiting`, `blocked`, `done`, `error`) and rejecting invalid values early in the pipeline.

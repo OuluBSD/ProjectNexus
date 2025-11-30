@@ -69,6 +69,20 @@ describe("JSON Status Processor", () => {
       assert.strictEqual(result.error, "JSON must include 'progress' field");
     });
 
+    test("rejects JSON with unknown status", () => {
+      const json = { status: "nearly_done", progress: 95 };
+      const result = validateJSON(json);
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.error?.includes("Status must be one of"));
+    });
+
+    test("normalizes status casing and separators", () => {
+      const json = { status: "In-Progress", progress: 42 };
+      const result = validateJSON(json);
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.normalizedStatus, "in_progress");
+    });
+
     test("rejects progress < 0", () => {
       const json = { status: "error", progress: -10 };
       const result = validateJSON(json);
@@ -225,6 +239,19 @@ describe("JSON Status Processor", () => {
       assert.deepStrictEqual(result.json, { status: "in_progress", progress: 75 });
     });
 
+    test("normalizes status casing before returning", async () => {
+      const template: Template = {
+        id: "template-4b",
+        title: "JSON Required",
+        jsonRequired: true,
+      };
+      const message = `{"status": "Done", "progress": 100}`;
+      const result = await processMessageForJSON(message, chat, template);
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.status, "done");
+      assert.strictEqual(result.progress, 100);
+    });
+
     test("executes template logic on valid JSON", async () => {
       const template: Template = {
         id: "template-5",
@@ -236,7 +263,7 @@ describe("JSON Status Processor", () => {
           context.result.status = context.result.progress === 100 ? 'done' : 'in_progress';
         `,
       };
-      const message = `{"status": "working", "progress": 40}`;
+      const message = `{"status": "in_progress", "progress": 40}`;
       const result = await processMessageForJSON(message, chat, template);
       assert.strictEqual(result.valid, true);
       assert.strictEqual(result.progress, 80);
@@ -254,6 +281,19 @@ describe("JSON Status Processor", () => {
       const result = await processMessageForJSON(message, chat, template);
       assert.strictEqual(result.valid, false);
       assert.ok(result.error?.includes("Failed to execute"));
+    });
+
+    test("flags invalid status values during processing", async () => {
+      const template: Template = {
+        id: "template-7",
+        title: "JSON Required",
+        jsonRequired: true,
+      };
+      const message = `{"status": "ready", "progress": 80}`;
+      const result = await processMessageForJSON(message, chat, template);
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.needsReformat, true);
+      assert.ok(result.error?.includes("Status must be one of"));
     });
   });
 });

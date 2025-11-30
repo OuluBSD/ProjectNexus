@@ -29,7 +29,7 @@ async function resolveSession(
       const session = await jsonGetSessionWithUser(fastify.jsonDb, token);
       if (session) return session;
     } catch (err) {
-      fastify.log.error(
+      fastify.log?.error?.(
         { err },
         "Failed to resolve session from JSON database; trying PostgreSQL."
       );
@@ -43,7 +43,7 @@ async function resolveSession(
       const session = await pgGetSessionWithUser(fastify.db, token);
       if (session) return session;
     } catch (err) {
-      fastify.log.error(
+      fastify.log?.error?.(
         { err },
         "Failed to resolve session from PostgreSQL; checking memory store."
       );
@@ -52,7 +52,7 @@ async function resolveSession(
 
   // Fall back to in-memory store
   const memorySession = store.sessions.get(token);
-  fastify.log.info(
+  fastify.log?.info?.(
     { token, found: !!memorySession, totalSessions: store.sessions.size },
     "Session lookup in memory store"
   );

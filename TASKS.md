@@ -212,7 +212,7 @@ Implement DB models + TypeScript interfaces:
 - [x] Template fields (title, goal, jsonRequired)
 - [x] JS prompt + JS logic storage
 - [x] Metadata editor
-- [ ] Validation of JSON status compliance
+- [x] Validation of JSON status compliance
 
 ---
 
@@ -312,6 +312,7 @@ AI Integration Implementation:
 
 ## Recent Notes
 
+- Enforced JSON status compliance by normalizing allowed statuses (`idle`, `in_progress`, `waiting`, `blocked`, `done`, `error`) and rejecting invalid values early in the pipeline.
 - Documented the audit `ipAddress` filter semantics in `API_CONTRACTS.md` so it is clear how to scope queries by IP.
 - Ensured the Code tab now surfaces save failures with toast messaging that mirrors the detail shown for successful writes.
 - Confirmed the terminal WebSocket idle timer test in `nexus-backend` stays open when `TERMINAL_IDLE_MS` is zero (`tsx --test src/__tests__/terminal.ws-client.test.ts`).

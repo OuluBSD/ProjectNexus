@@ -17,6 +17,17 @@ export type JSONStatusResult = {
   needsReformat?: boolean;
 };
 
+const ALLOWED_STATUSES = ["idle", "in_progress", "waiting", "blocked", "done", "error"];
+
+function normalizeStatus(status: unknown): string | null {
+  if (typeof status !== "string") return null;
+  const normalized = status
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return ALLOWED_STATUSES.includes(normalized) ? normalized : null;
+}
+
 /**
  * Extract JSON from assistant message content.
  * Looks for JSON blocks in code fences or at the end of the message.
@@ -60,7 +71,7 @@ export function extractJSON(content: string): Record<string, unknown> | null {
 export function validateJSON(
   json: Record<string, unknown>,
   template?: Template
-): { valid: boolean; error?: string } {
+): { valid: boolean; error?: string; normalizedStatus?: string } {
   if (!json || typeof json !== "object") {
     return { valid: false, error: "JSON must be an object" };
   }
@@ -74,11 +85,19 @@ export function validateJSON(
     return { valid: false, error: "JSON must include 'progress' field" };
   }
 
+  const normalizedStatus = normalizeStatus((json as Record<string, unknown>).status);
+  if (!normalizedStatus) {
+    return {
+      valid: false,
+      error: `Status must be one of: ${ALLOWED_STATUSES.join(", ")}`,
+    };
+  }
+
   if (typeof json.progress !== "number" || json.progress < 0 || json.progress > 100) {
     return { valid: false, error: "Progress must be a number between 0 and 100" };
   }
 
-  return { valid: true };
+  return { valid: true, normalizedStatus };
 }
 
 /**
@@ -160,7 +179,10 @@ export async function processMessageForJSON(
   }
 
   // Execute template logic
-  const result = await executeTemplateLogic(json, template, chat);
+  const normalizedJSON = validation.normalizedStatus
+    ? { ...json, status: validation.normalizedStatus }
+    : json;
+  const result = await executeTemplateLogic(normalizedJSON, template, chat);
   if (result.error) {
     return {
       valid: false,

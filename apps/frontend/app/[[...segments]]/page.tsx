@@ -437,6 +437,42 @@ const qwenCliPreview: DemoStep[] = [
   },
 ];
 
+function renderDemoStepContent(item: DemoStepItem) {
+  if (item.kind === "text") {
+    return <div className="demo-step-text">{item.content}</div>;
+  }
+
+  if (item.kind === "diff") {
+    const lines = item.content.split("\n");
+    return (
+      <div className="demo-step-diff-block" aria-label="Diff preview">
+        {lines.map((line, idx) => {
+          const lineType = line.startsWith("+")
+            ? "add"
+            : line.startsWith("-")
+              ? "del"
+              : line.startsWith("@@")
+                ? "hunk"
+                : line.startsWith("diff ") ||
+                    line.startsWith("index") ||
+                    line.startsWith("---") ||
+                    line.startsWith("+++")
+                  ? "meta"
+                  : "neutral";
+          return (
+            <div key={idx} className={`demo-step-diff-line demo-step-diff-${lineType}`}>
+              <span className="demo-step-diff-glyph">{line[0] ?? " "}</span>
+              <span className="demo-step-diff-text">{line.slice(1) || " "}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return <pre className="demo-step-content">{item.content}</pre>;
+}
+
 function normalizeTheme(theme?: Record<string, unknown> | null): ThemeOverride | undefined {
   if (!theme) return undefined;
   const normalized: ThemeOverride = {};
@@ -3646,11 +3682,7 @@ export default function Page() {
                           {item.title}
                         </div>
                       )}
-                      {item.kind === "text" ? (
-                        <div className="demo-step-text">{item.content}</div>
-                      ) : (
-                        <pre className="demo-step-content">{item.content}</pre>
-                      )}
+                      {renderDemoStepContent(item)}
                     </div>
                   ))}
                 </div>

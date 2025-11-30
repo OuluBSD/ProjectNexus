@@ -429,6 +429,59 @@ body {
   background: rgba(30, 64, 175, 0.25);
 }
 
+.demo-step-diff-block {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.demo-step-diff-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+.demo-step-diff-glyph {
+  width: 12px;
+  text-align: right;
+  opacity: 0.7;
+}
+
+.demo-step-diff-text {
+  flex: 1;
+}
+
+.demo-step-diff-add {
+  background: rgba(34, 197, 94, 0.14);
+  color: #bbf7d0;
+}
+
+.demo-step-diff-del {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecdd3;
+}
+
+.demo-step-diff-hunk {
+  background: rgba(59, 130, 246, 0.14);
+  color: #bfdbfe;
+}
+
+.demo-step-diff-meta {
+  color: #cbd5e1;
+  opacity: 0.95;
+}
+
+.demo-step-diff-neutral {
+  color: #e2e8f0;
+}
+
 .panel-title {
   font-weight: 800;
   font-size: 18px;

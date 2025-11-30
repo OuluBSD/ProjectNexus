@@ -21,6 +21,7 @@ interface UseAIChatBackendOptions {
   token: string;
   disableTools?: boolean;
   disableFilesystem?: boolean;
+  allowChallenge?: boolean;
 }
 
 export function useAIChatBackend(options: UseAIChatBackendOptions) {
@@ -65,7 +66,13 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     const protocol = backendUrl.startsWith("https") ? "wss:" : "ws:";
     // Append connectionId to sessionId to ensure unique sessions even with React StrictMode double-mounting
     const uniqueSessionId = `${options.sessionId}-${connectionId.current}`;
-    const wsUrl = `${protocol}//${backendHost}/api/ai-chat/${uniqueSessionId}?backend=${options.backend}&token=${options.token}`;
+    const challengeParam =
+      options.allowChallenge === false ? "false" : options.allowChallenge === true ? "true" : "";
+    const wsUrl = `${protocol}//${backendHost}/api/ai-chat/${uniqueSessionId}?backend=${
+      options.backend
+    }&token=${options.token}${
+      challengeParam ? `&challenge=${encodeURIComponent(challengeParam)}` : ""
+    }`;
 
     if (options.disableTools) {
       // Add query param (will be implemented in backend)
@@ -109,7 +116,13 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
       setStatusMessage("Disconnected");
       wsRef.current = null;
     };
-  }, [options.backend, options.sessionId, options.token, options.disableTools]);
+  }, [
+    options.backend,
+    options.sessionId,
+    options.token,
+    options.disableTools,
+    options.allowChallenge,
+  ]);
 
   // Disconnect from backend
   const disconnect = useCallback(() => {

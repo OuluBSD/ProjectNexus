@@ -4,12 +4,27 @@ import { AIBackendType } from "@nexus/shared/chat/AIBackend";
 import { QwenCommand } from "../services/qwenClient.js";
 import { createAiBridge, resolveAiChain } from "../services/aiChatBridge.js";
 
+const CHALLENGE_PROMPT = [
+  "You are allowed and encouraged to challenge the user when statements seem incorrect or risky.",
+  "Ask clarifying questions before agreeing, surface contradictions, and offer safer alternatives.",
+  "Be respectful and concise while still pushing back when evidence is weak or assumptions are shaky.",
+].join(" ");
+
+function parseBooleanFlag(value: string | undefined, defaultValue: boolean): boolean {
+  if (typeof value !== "string") return defaultValue;
+  const lowered = value.trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(lowered)) return true;
+  if (["false", "0", "no", "off"].includes(lowered)) return false;
+  return defaultValue;
+}
+
 export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/ai-chat/:sessionId", { websocket: true }, async (connection, request) => {
     const { sessionId } = request.params as { sessionId: string };
-    const { backend, token } = request.query as {
+    const { backend, token, challenge } = request.query as {
       backend: AIBackendType;
       token: string;
+      challenge?: string;
     };
 
     const session = await validateToken(request.server, token);
@@ -35,6 +50,10 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
 
     let bridgeCleanup: (() => Promise<void>) | null = null;
     const approvedToolGroups = new Set<number>();
+    const allowChallenge = parseBooleanFlag(
+      challenge,
+      parseBooleanFlag(process.env.ASSISTANT_CHALLENGE_ENABLED, true)
+    );
 
     try {
       const chain = await resolveAiChain(fastify);
@@ -87,8 +106,25 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
           state: "idle",
           message: `Connected via ${bridge.transport}`,
           transport: bridge.transport,
+          challenge: allowChallenge,
         })
       );
+
+      connection.socket.send(
+        JSON.stringify({
+          type: "info",
+          message: allowChallenge
+            ? "Challenge mode enabled: the assistant may question or push back on unclear requests."
+            : "Challenge mode disabled: the assistant will default to cooperative responses.",
+        })
+      );
+
+      if (allowChallenge) {
+        bridge.send({
+          type: "user_input",
+          content: CHALLENGE_PROMPT,
+        });
+      }
 
       bridgeCleanup = async () => {
         await bridge.shutdown();

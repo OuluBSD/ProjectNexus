@@ -312,6 +312,7 @@ AI Integration Implementation:
 
 ## Recent Notes
 
+- Added assistant challenge toggle (default on) flowing from env config to AI chat connections, sending a system prompt that encourages respectful pushback on unclear or risky user statements.
 - Enforced JSON status compliance by normalizing allowed statuses (`idle`, `in_progress`, `waiting`, `blocked`, `done`, `error`) and rejecting invalid values early in the pipeline.
 - Documented the audit `ipAddress` filter semantics in `API_CONTRACTS.md` so it is clear how to scope queries by IP.
 - Ensured the Code tab now surfaces save failures with toast messaging that mirrors the detail shown for successful writes.
@@ -409,7 +410,7 @@ AI Integration Implementation:
 
 ### Assistant Challenge Option
 
-- [ ] Add a configuration option (on by default) that allows the assistant to challenge the user instead of always agreeing. This will enhance critical thinking and prevent the assistant from blindly accepting incorrect statements.
+- [x] Add a configuration option (on by default) that allows the assistant to challenge the user instead of always agreeing. This will enhance critical thinking and prevent the assistant from blindly accepting incorrect statements.
 
 ### Tasklist Scheduler
 

@@ -85,12 +85,24 @@ const CONFIG_DEFAULTS: ConfigDefault[] = [
     value: "http://localhost:3001",
     section: "Frontend configuration",
   },
+  {
+    key: "NEXT_PUBLIC_ASSISTANT_CHALLENGE_ENABLED",
+    value: "true",
+    comment: "Default challenge mode in AI chat UI (true enables pushback)",
+    section: "Frontend configuration",
+  },
 
   // AI Integration (Qwen AI)
   {
     key: "ENABLE_AI",
     value: "true",
     comment: "Enable AI-powered features",
+    section: "AI Integration (Qwen AI)",
+  },
+  {
+    key: "ASSISTANT_CHALLENGE_ENABLED",
+    value: "true",
+    comment: "Allow assistant to challenge unclear/incorrect user statements",
     section: "AI Integration (Qwen AI)",
   },
   {
@@ -102,7 +114,7 @@ const CONFIG_DEFAULTS: ConfigDefault[] = [
   {
     key: "QWEN_PATH",
     value: "",
-    comment: "Path to qwen-code CLI script (defaults to ~/Dev/qwen-code/script/qwen-code)",
+    comment: "Path to qwen-code CLI script (defaults to ./deps/qwen-code/script/qwen-code)",
     section: "AI Integration (Qwen AI)",
   },
 

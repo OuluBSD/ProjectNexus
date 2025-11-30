@@ -29,6 +29,14 @@ interface AIChatProps {
 }
 
 export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: AIChatProps) {
+  const parseBool = (value: string | undefined, fallback: boolean) => {
+    if (!value) return fallback;
+    const lowered = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(lowered)) return true;
+    if (["false", "0", "no", "off"].includes(lowered)) return false;
+    return fallback;
+  };
+
   const [sessions, setSessions] = useState<ChatSession[]>([
     {
       id: "default",
@@ -39,6 +47,9 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
   const [activeSessionId, setActiveSessionId] = useState("default");
   const [selectedBackend, setSelectedBackend] = useState<AIBackendType>("qwen");
   const [inputValue, setInputValue] = useState("");
+  const [allowChallenge, setAllowChallenge] = useState(() =>
+    parseBool(process.env.NEXT_PUBLIC_ASSISTANT_CHALLENGE_ENABLED, true)
+  );
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,6 +72,7 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
     backend: activeSession?.backend || "qwen",
     sessionId: activeSessionId,
     token: sessionToken || "",
+    allowChallenge,
   });
 
   // Auto-connect when session token is available and disconnect on session change
@@ -198,6 +210,14 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
             <option value="gemini">Gemini</option>
             <option value="codex">Codex</option>
           </select>
+          <label className="ai-chat-toggle">
+            <input
+              type="checkbox"
+              checked={allowChallenge}
+              onChange={(e) => setAllowChallenge(e.target.checked)}
+            />
+            Allow challenge
+          </label>
         </div>
       </div>
 

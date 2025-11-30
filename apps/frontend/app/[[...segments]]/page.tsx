@@ -62,6 +62,7 @@ type Status =
   | "in_progress"
   | "idle"
   | "error";
+type MainTab = "Chat" | "Terminal" | "Code";
 const DEMO_USERNAME = process.env.NEXT_PUBLIC_DEMO_USERNAME ?? "demo";
 const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "demo";
 const DEMO_KEYFILE = process.env.NEXT_PUBLIC_DEMO_KEYFILE_TOKEN;
@@ -512,7 +513,8 @@ export default function Page() {
     return stored === "minimal" ? "minimal" : "expanded";
   });
   const [projectThemePreset, setProjectThemePreset] = useState<ProjectThemePresetKey>("default");
-  const [activeTab, setActiveTab] = useState<"Chat" | "Terminal" | "Code">("Chat");
+  const [activeTab, setActiveTab] = useState<MainTab>("Chat");
+  const [chatTabState, setChatTabState] = useState<Record<string, MainTab>>({});
   const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
   const [terminalOutput, setTerminalOutput] = useState<string>("Connect to stream to see output.");
   const [terminalInput, setTerminalInput] = useState<string>("");
@@ -590,6 +592,22 @@ export default function Page() {
   useEffect(() => {
     applyThemePalette(activePalette);
   }, [activePalette]);
+
+  const rememberTabForChat = useCallback((tab: MainTab, chatId?: string | null) => {
+    if (!chatId) return;
+    setChatTabState((prev) => {
+      if (prev[chatId] === tab) return prev;
+      return { ...prev, [chatId]: tab };
+    });
+  }, []);
+
+  const handleTabChange = useCallback(
+    (tab: MainTab, targetChatId?: string | null) => {
+      setActiveTab(tab);
+      rememberTabForChat(tab, targetChatId ?? selectedChatId);
+    },
+    [rememberTabForChat, selectedChatId]
+  );
 
   // Handle real-time meta-chat status updates via WebSocket
   const handleMetaChatStatusUpdate = useCallback(
@@ -982,6 +1000,8 @@ export default function Page() {
       setSelectedProjectId(null);
       setSelectedRoadmapId(null);
       setSelectedChatId(null);
+      setChatTabState({});
+      setActiveTab("Chat");
       syncUrlSelection(null, null, null);
       if (typeof window !== "undefined") {
         localStorage.removeItem("sessionToken");
@@ -1600,7 +1620,7 @@ export default function Page() {
           case "add-chat":
             if (roadmap.id) {
               await handleSelectRoadmap(roadmap.id);
-              setActiveTab("Chat");
+              handleTabChange("Chat");
               setChatDraft({ title: "", goal: "" });
               void openRoadmapContextPanel(roadmap, `Chat flow ready for ${roadmap.title}.`);
               nextMessage = `Ready to add a chat on ${roadmap.title}.`;
@@ -1771,13 +1791,13 @@ export default function Page() {
     [
       contextMenu,
       handleSelectRoadmap,
+      handleTabChange,
       loadMessagesForChat,
       openProjectSettingsPanel,
       openProjectTemplatesPanel,
       selectedChatId,
       selectedProjectId,
       sessionToken,
-      setActiveTab,
       setChatDraft,
       setChats,
       setContextMenu,
@@ -2399,7 +2419,7 @@ export default function Page() {
     (chat: ChatItem | null) => {
       const resolvedPath = resolveChatFolder(chat);
       const targetPath = resolvedPath ?? ".";
-      setActiveTab("Code");
+      handleTabChange("Code", chat?.id ?? selectedChatId);
       if (!sessionToken || !selectedProjectId) {
         setFsToast({
           message: "Login to browse files",
@@ -2420,7 +2440,14 @@ export default function Page() {
         });
       }
     },
-    [loadFsTree, resolveChatFolder, selectedProjectId, sessionToken]
+    [
+      handleTabChange,
+      loadFsTree,
+      resolveChatFolder,
+      selectedChatId,
+      selectedProjectId,
+      sessionToken,
+    ]
   );
 
   useEffect(() => {
@@ -2693,6 +2720,20 @@ export default function Page() {
       : messages.filter((message) => message.role === messageFilter);
 
   const messageNav = useMessageNavigation(messages, visibleMessages);
+
+  useEffect(() => {
+    if (!selectedChatId) {
+      if (activeTab !== "Chat") {
+        setActiveTab("Chat");
+      }
+      return;
+    }
+    const rememberedTab = chatTabState[selectedChatId];
+    const nextTab = rememberedTab ?? "Chat";
+    if (nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, chatTabState, selectedChatId]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -3743,7 +3784,7 @@ export default function Page() {
                     <button
                       key={tab}
                       className={`tab ${activeTab === tab ? "active" : ""}`}
-                      onClick={() => setActiveTab(tab as typeof activeTab)}
+                      onClick={() => handleTabChange(tab as MainTab)}
                     >
                       {tab}
                     </button>

@@ -202,7 +202,7 @@ Implement DB models + TypeScript interfaces:
 - [x] File tree
 - [x] Syntax highlighting (highlight.js)
 - [x] Diff viewer with color-coded formatting
-- [ ] Tab state remembered per chat
+- [x] Tab state remembered per chat
 
 ---
 
@@ -331,6 +331,7 @@ AI Integration Implementation:
 - Updated the workspace page to import and render `TemplatePanel` when the `project-templates` context panel is shown, with a `reloadTemplates` callback to refresh the list after creation.
 - Implemented message navigation with `useMessageNavigation` hook (`apps/frontend/components/MessageNavigation.tsx`) that provides prev/next buttons to jump between user messages with smooth scrolling and visual highlighting.
 - Added auto-scroll behavior to chat stream that maintains bottom position when new messages arrive, only if user is near bottom (within 100px).
+- Remembered the main panel tab selection per chat so switching chats restores the last-used tab instead of sharing one global tab state.
 - Fixed pre-existing TypeScript errors where `project.status` and `roadmap.status` strings needed type assertions for `formatStatusLabel`.
 - Added `templateId` field to Playwright test data to satisfy type requirements in route helpers.
 - Verified that Projects and Roadmaps columns already have complete UI polish: color-coded status dots, category/tag pills, progress percentages, summary info, and grouping. Marked these items as complete in TASKS.md sections 5 and 6.

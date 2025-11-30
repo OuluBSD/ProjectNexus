@@ -286,27 +286,156 @@ const projectThemePresetLabels: Record<ProjectThemePresetKey, string> = {
 };
 type GlobalThemeMode = "auto" | "dark" | "light";
 
-const demoSeed = {
-  project: {
-    name: "Nexus",
-    category: "Product",
-    status: "active",
-    description: "Multi-agent cockpit",
-    theme: projectThemePresets.nebula,
-  },
-  roadmap: {
-    title: "MVP Core",
-    tags: ["api", "db"],
-    progress: 0.42,
-    status: "in_progress" as Status,
-  },
-  chat: {
-    title: "Implement FS API",
-    goal: "Expose safe FS endpoints",
-    status: "in_progress" as Status,
-    progress: 0.35,
-  },
+const autoDemoWorkspace = {
+  path: "/workspace/auto-demo/qwen-backend",
+  repo: "git@github.com/project-nexus/auto-demo.git",
 };
+
+type DemoSeedChat = {
+  title: string;
+  goal?: string;
+  status?: Status;
+  progress?: number;
+  metadata?: Record<string, unknown>;
+  starterMessages?: { role: MessageItem["role"]; content: string }[];
+};
+
+const demoSeeds: {
+  key: string;
+  project: {
+    name: string;
+    category: string;
+    status: Status;
+    description: string;
+    theme?: ThemeOverride;
+  };
+  roadmap: { title: string; tags: string[]; progress: number; status: Status };
+  workspace?: typeof autoDemoWorkspace;
+  chats: DemoSeedChat[];
+}[] = [
+  {
+    key: "nexus",
+    project: {
+      name: "Nexus",
+      category: "Product",
+      status: "active",
+      description: "Multi-agent cockpit",
+      theme: projectThemePresets.nebula,
+    },
+    roadmap: {
+      title: "MVP Core",
+      tags: ["api", "db"],
+      progress: 0.42,
+      status: "in_progress" as Status,
+    },
+    chats: [
+      {
+        title: "Implement FS API",
+        goal: "Expose safe FS endpoints",
+        status: "in_progress" as Status,
+        progress: 0.35,
+      },
+    ],
+  },
+  {
+    key: "auto-demo",
+    project: {
+      name: "Automatic Demo",
+      category: "Demo",
+      status: "active",
+      description:
+        "Dedicated demo workspace at /workspace/auto-demo/qwen-backend with git enabled for backend agent flows.",
+      theme: projectThemePresets.ice,
+    },
+    roadmap: {
+      title: "Qwen Backend",
+      tags: ["qwen", "backend", "demo"],
+      progress: 0.15,
+      status: "in_progress" as Status,
+    },
+    workspace: autoDemoWorkspace,
+    chats: [
+      {
+        title: "Wire Qwen backend",
+        goal: "Follow qwen-backend session to start writing code in the demo repo.",
+        status: "active" as Status,
+        progress: 0.12,
+        metadata: {
+          workspacePath: autoDemoWorkspace.path,
+          gitRepo: autoDemoWorkspace.repo,
+        },
+        starterMessages: [
+          {
+            role: "assistant",
+            content:
+              "✦ I need to stage the modified file that is not staged yet:\n\n```bash\n# Shell\ncd /workspace/auto-demo/qwen-backend\n2 git status --short\n4 git add uppsrc/Qwen/QwenTCPServer.cpp\n```",
+          },
+          {
+            role: "assistant",
+            content:
+              '✦ Now let me check the differences in the C++ file:\n\n```bash\n# Shell\ngit diff uppsrc/Qwen/QwenTCPServer.cpp\n```\n\n```\ndiff --git a/uppsrc/Qwen/QwenTCPServer.cpp b/uppsrc/Qwen/QwenTCPServer.cpp\nindex 844a81a2..02744353 100644\n--- a/uppsrc/Qwen/QwenTCPServer.cpp\n+++ b/uppsrc/Qwen/QwenTCPServer.cpp\n@@ -208,7 +208,7 @@ bool QwenTCPServer::start(int port, const std::string& host) {\n              // In a real implementation, we would route to the specific client that made the request\n              std::string response = "{";\n              response += "\\"type\\":\\"assistant_response\\",";\n-             response += "\\"content\\":" + std::string("\\"") + msg.content + std::string("\\"");\n+             response += "\\"content\\":\\"" + json_escape(msg.content) + "\\"";\n              response += "}\\n";\n \n              // Send to all connected clients\n```\n',
+          },
+        ],
+      },
+    ],
+  },
+];
+
+type DemoStepItem = {
+  kind: "text" | "command" | "diff";
+  title?: string;
+  content: string;
+};
+
+type DemoStep = {
+  id: string;
+  headline: string;
+  items: DemoStepItem[];
+};
+
+const qwenCliPreview: DemoStep[] = [
+  {
+    id: "stage-file",
+    headline: "I need to stage the modified file that is not staged yet:",
+    items: [
+      {
+        kind: "command",
+        title: "Shell git add uppsrc/Qwen/QwenTCPServer.cpp",
+        content: "git add uppsrc/Qwen/QwenTCPServer.cpp",
+      },
+    ],
+  },
+  {
+    id: "diff-file",
+    headline: "Now let me check the differences in the C++ file:",
+    items: [
+      {
+        kind: "command",
+        title: "Shell git diff uppsrc/Qwen/QwenTCPServer.cpp",
+        content: "git diff uppsrc/Qwen/QwenTCPServer.cpp",
+      },
+      {
+        kind: "diff",
+        title: "Diff text",
+        content: [
+          "diff --git a/uppsrc/Qwen/QwenTCPServer.cpp b/uppsrc/Qwen/QwenTCPServer.cpp",
+          "index 844a81a2..02744353 100644",
+          "--- a/uppsrc/Qwen/QwenTCPServer.cpp",
+          "+++ b/uppsrc/Qwen/QwenTCPServer.cpp",
+          "@@ -208,7 +208,7 @@ bool QwenTCPServer::start(int port, const std::string& host) {",
+          "             // In a real implementation, we would route to the specific client that made the request",
+          '             std::string response = "{";',
+          '             response += "\\"type\\":\\"assistant_response\\",";',
+          '-            response += "\\"content\\":" + std::string("\\"") + msg.content + std::string("\\"");',
+          '+            response += "\\"content\\":\\"" + json_escape(msg.content) + "\\"";',
+          '             response += "}\\n";',
+          "",
+          "             // Send to all connected clients",
+        ].join("\n"),
+      },
+    ],
+  },
+];
 
 function normalizeTheme(theme?: Record<string, unknown> | null): ThemeOverride | undefined {
   if (!theme) return undefined;
@@ -460,6 +589,16 @@ function readWorkspacePath(meta?: Record<string, unknown> | null) {
   return null;
 }
 
+function readGitRepo(meta?: Record<string, unknown> | null) {
+  if (!meta) return null;
+  const fields = ["gitRepo", "repo", "repository", "git"];
+  for (const key of fields) {
+    const value = (meta as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 export default function Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -469,6 +608,9 @@ export default function Page() {
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const autoDemoSeed = useMemo(() => demoSeeds.find((seed) => seed.key === "auto-demo"), []);
+  const autoDemoChatTitle = autoDemoSeed?.chats[0]?.title ?? "Wire Qwen backend";
+  const autoDemoRoadmapTitle = autoDemoSeed?.roadmap.title ?? "Qwen Backend";
   const resolveChatFolder = useCallback(
     (chat?: ChatItem | null) => {
       if (!chat) return null;
@@ -477,6 +619,17 @@ export default function Page() {
       if (!chat.templateId) return null;
       const template = templates.find((t) => t.id === chat.templateId);
       return readWorkspacePath(template?.metadata ?? null);
+    },
+    [templates]
+  );
+  const resolveChatRepo = useCallback(
+    (chat?: ChatItem | null) => {
+      if (!chat) return null;
+      const directRepo = readGitRepo(chat.metadata);
+      if (directRepo) return directRepo;
+      if (!chat.templateId) return null;
+      const template = templates.find((t) => t.id === chat.templateId);
+      return readGitRepo(template?.metadata ?? null);
     },
     [templates]
   );
@@ -1841,18 +1994,50 @@ export default function Page() {
       setStatusMessage("Login to seed demo data.");
       return;
     }
-    if (projects.length > 0) {
-      setStatusMessage("Projects already exist; skipping demo seed.");
-      return;
-    }
     setSeeding(true);
-    setStatusMessage(null);
+    setStatusMessage("Preparing demo projects and chats…");
     setError(null);
     try {
-      const { id: projectId } = await createProject(sessionToken, demoSeed.project);
-      const { id: roadmapId } = await createRoadmap(sessionToken, projectId, demoSeed.roadmap);
-      await createChat(sessionToken, roadmapId, demoSeed.chat);
-      setStatusMessage("Demo data created.");
+      for (const seed of demoSeeds) {
+        const existingProject = projects.find((p) => p.name === seed.project.name);
+        let projectId = existingProject?.id ?? null;
+        if (!projectId) {
+          const { id } = await createProject(sessionToken, seed.project);
+          projectId = id;
+        }
+        if (!projectId) continue;
+
+        const roadmapList = await fetchRoadmaps(sessionToken, projectId);
+        let roadmapId = roadmapList.find((r) => r.title === seed.roadmap.title)?.id ?? null;
+        if (!roadmapId) {
+          const { id } = await createRoadmap(sessionToken, projectId, seed.roadmap);
+          roadmapId = id;
+        }
+        if (!roadmapId) continue;
+
+        const existingChats = await fetchChats(sessionToken, roadmapId);
+        for (const chatSeed of seed.chats) {
+          const existingChat = existingChats.find((chat) => chat.title === chatSeed.title);
+          let chatId = existingChat?.id ?? null;
+          const createdChat = !chatId;
+          if (!chatId) {
+            const { id } = await createChat(sessionToken, roadmapId, {
+              title: chatSeed.title,
+              goal: chatSeed.goal,
+              status: chatSeed.status,
+              progress: chatSeed.progress,
+              metadata: chatSeed.metadata,
+            });
+            chatId = id;
+          }
+          if (createdChat && chatId && chatSeed.starterMessages?.length) {
+            for (const starter of chatSeed.starterMessages) {
+              await postChatMessage(sessionToken, chatId, starter);
+            }
+          }
+        }
+      }
+      setStatusMessage("Demo data ready.");
       await hydrateWorkspace(sessionToken, activeUser ?? username ?? DEMO_USERNAME);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to seed demo data";
@@ -1861,7 +2046,7 @@ export default function Page() {
     } finally {
       setSeeding(false);
     }
-  }, [activeUser, hydrateWorkspace, projects.length, sessionToken, username]);
+  }, [activeUser, hydrateWorkspace, projects, sessionToken, username]);
 
   const handleCreateProject = useCallback(async () => {
     if (!sessionToken) {
@@ -2710,6 +2895,7 @@ export default function Page() {
     ? templates.find((t) => t.id === selectedChat.templateId)
     : null;
   const folderHint = resolveChatFolder(selectedChat);
+  const repoHint = resolveChatRepo(selectedChat);
   const roadmapMeta = selectedRoadmapId ? metaChats[selectedRoadmapId] : null;
   const roadmapSummary = selectedRoadmapId ? roadmapStatus[selectedRoadmapId] : null;
   const siblingTasks = chats.filter((chat) => !chat.meta && chat.id && chat.id !== selectedChatId);
@@ -3008,6 +3194,13 @@ export default function Page() {
                 </span>
               ) : (
                 <span className="item-subtle">Folder: project root</span>
+              )}
+              {repoHint ? (
+                <span className="item-pill" title={repoHint}>
+                  Repo: {repoHint}
+                </span>
+              ) : (
+                <span className="item-subtle">Repo: pending</span>
               )}
               {roadmapSummary && (
                 <span className="item-pill" title={roadmapSummary.summary ?? ""}>
@@ -3413,6 +3606,56 @@ export default function Page() {
                 {statusMessage}
               </div>
             )}
+          </div>
+          <div className="panel-card demo-session-card">
+            <div
+              className="item-line"
+              style={{ gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}
+            >
+              <div style={{ flex: 1, minWidth: 260 }}>
+                <div className="panel-title" style={{ marginBottom: 4 }}>
+                  Automatic demo workspace (git-backed)
+                </div>
+                <div className="panel-text">
+                  Follow the qwen-backend in a dedicated demo project with its own folder, git repo,
+                  and a chat that already starts writing code.
+                </div>
+              </div>
+              <div className="demo-pills">
+                <span className="item-pill">Workspace: {autoDemoWorkspace.path}</span>
+                <span className="item-pill">Repo: {autoDemoWorkspace.repo}</span>
+                <span className="item-pill">Chat: {autoDemoChatTitle}</span>
+              </div>
+            </div>
+            <div className="panel-text">
+              The roadmap list now contains a <strong>{autoDemoRoadmapTitle}</strong> entry with a
+              new chat that opens on these CLI-style steps:
+            </div>
+            <div className="demo-steps">
+              {qwenCliPreview.map((step) => (
+                <div key={step.id} className="demo-step">
+                  <div className="demo-step-headline">✦ {step.headline}</div>
+                  {step.items.map((item, index) => (
+                    <div
+                      key={`${step.id}-${index}`}
+                      className={`demo-step-item demo-step-${item.kind}`}
+                    >
+                      {item.title && (
+                        <div className="demo-step-title">
+                          {item.kind === "command" ? "✓ " : item.kind === "diff" ? "↦ " : ""}
+                          {item.title}
+                        </div>
+                      )}
+                      {item.kind === "text" ? (
+                        <div className="demo-step-text">{item.content}</div>
+                      ) : (
+                        <pre className="demo-step-content">{item.content}</pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
           <div className="columns">
             <div

@@ -960,8 +960,10 @@ export default function Page() {
     project?: ProjectItem | null;
   } | null>(null);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
-  const resolvedGlobalThemeMode: "dark" | "light" =
-    globalThemeMode === "auto" ? systemColorScheme : globalThemeMode;
+  const resolvedGlobalThemeMode: "dark" | "light" = useMemo(
+    () => (globalThemeMode === "auto" ? systemColorScheme : globalThemeMode),
+    [globalThemeMode, systemColorScheme]
+  );
   useEffect(() => {
     applyThemePalette(activePalette);
   }, [activePalette]);

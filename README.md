@@ -145,6 +145,23 @@ For endpoint-level details, see `ARCHITECTURE.md`.
 
 # 🚀 Getting Started (Development)
 
+## Requirements
+
+- Node.js 20+ (we develop on 22/24) and `pnpm` 9 (repo sets `packageManager` to `pnpm@9.12.0`)
+- Git and a writable workspace for project data
+- Postgres for metadata (see `ARCHITECTURE.md`/`USAGE.md` for schema setup)
+- Optional: managed Gemini CLI / Qwen auth configured via `.env` when using live AI
+
+## Installing node_modules
+
+All workspace packages are installed from the repo root:
+
+```bash
+pnpm install
+```
+
+This populates the monorepo `node_modules` (and each package’s nested `node_modules`) according to the lockfile. Do **not** hand-install packages directly into `node_modules`; always update dependencies through `pnpm` (or `npm install` at the root if you must, but `pnpm` is the supported path). After dependency changes, commit only the lockfile updates—never commit `node_modules`.
+
 ## Quick "Hello World"
 
 ```bash

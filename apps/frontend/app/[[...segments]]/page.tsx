@@ -190,6 +190,8 @@ type ContextPanel =
       metaSummary?: string | null;
     };
 
+type SettingsCategory = "appearance" | "workspace";
+
 const contextActionConfig: Record<ContextTarget, { key: string; label: string }[]> = {
   project: [
     { key: "edit", label: "Edit project" },
@@ -207,6 +209,10 @@ const contextActionConfig: Record<ContextTarget, { key: string; label: string }[
     { key: "merge", label: "Merge chat" },
   ],
 };
+const SETTINGS_SECTIONS: { key: SettingsCategory; label: string; detail: string }[] = [
+  { key: "appearance", label: "Appearance", detail: "Theme & palette" },
+  { key: "workspace", label: "Workspace", detail: "Defaults & layout" },
+];
 const THEME_VARIABLES = {
   bg: "--bg",
   panel: "--panel",
@@ -870,7 +876,6 @@ export default function Page() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const openFolderForChatRef = useRef<((chat: ChatItem | null) => void) | null>(null);
   const [globalThemeMode, setGlobalThemeMode] = useState<GlobalThemeMode>("auto");
-  const [sidebarAnimationsEnabled, setSidebarAnimationsEnabled] = useState(true);
   const TERMINAL_AUTO_OPEN_KEY = "agentmgr:terminalAutoOpen";
   const [autoOpenTerminal, setAutoOpenTerminal] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -968,6 +973,9 @@ export default function Page() {
   const [auditLoading, setAuditLoading] = useState(false);
   const chatStreamRef = useRef<HTMLDivElement>(null);
   const systemColorScheme = usePrefersColorScheme();
+  const [accountMenu, setAccountMenu] = useState<{ x: number; y: number } | null>(null);
+  const [overlay, setOverlay] = useState<{ kind: "settings" | "activity" } | null>(null);
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
   const resolvedGlobalThemeMode: "dark" | "light" =
     globalThemeMode === "auto" ? systemColorScheme : globalThemeMode;
   const selectedProject = useMemo(
@@ -1111,12 +1119,6 @@ export default function Page() {
       console.error("[MetaChatWS] Connection error:", error);
     },
   });
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("agentmgr:sidebarAnimationsEnabled", String(sidebarAnimationsEnabled));
-    }
-  }, [sidebarAnimationsEnabled]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -1270,6 +1272,35 @@ export default function Page() {
       window.removeEventListener("keydown", handleKey);
     };
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!accountMenu || typeof window === "undefined") return;
+    const closeAccountMenu = () => setAccountMenu(null);
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAccountMenu(null);
+      }
+    };
+    window.addEventListener("mousedown", closeAccountMenu);
+    window.addEventListener("scroll", closeAccountMenu, true);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("mousedown", closeAccountMenu);
+      window.removeEventListener("scroll", closeAccountMenu, true);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [accountMenu]);
+
+  useEffect(() => {
+    if (!overlay || typeof window === "undefined") return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOverlay(null);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [overlay]);
 
   const ensureStatus = useCallback(
     async (roadmapId: string, token: string, options?: { forceRefresh?: boolean }) => {
@@ -1754,6 +1785,30 @@ export default function Page() {
   const handleLogout = useCallback(() => {
     clearWorkspaceState("Logged out");
   }, [clearWorkspaceState]);
+
+  const handleAccountMenuToggle = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(12, rect.right - 200);
+    const y = rect.bottom + 6;
+    setAccountMenu((prev) =>
+      prev && Math.abs(prev.x - x) < 2 && Math.abs(prev.y - y) < 2 ? null : { x, y }
+    );
+  }, []);
+
+  const handleOpenSettings = useCallback((category?: SettingsCategory) => {
+    setSettingsCategory(category ?? "appearance");
+    setOverlay({ kind: "settings" });
+    setAccountMenu(null);
+  }, []);
+
+  const handleOpenActivity = useCallback(() => {
+    setOverlay({ kind: "activity" });
+    setAccountMenu(null);
+  }, []);
+
+  const handleCloseOverlay = useCallback(() => {
+    setOverlay(null);
+  }, []);
 
   // Check for stored session token or auto-login with demo credentials
   useEffect(() => {
@@ -3885,7 +3940,12 @@ export default function Page() {
 
   return (
     <>
-      <TopMenuBar currentSection={currentSection} onSectionChange={setCurrentSection} />
+      <TopMenuBar
+        currentSection={currentSection}
+        onSectionChange={setCurrentSection}
+        activeUser={activeUser}
+        onAccountMenuToggle={handleAccountMenuToggle}
+      />
       {currentSection === "ai-chat" ? (
         <AIChat sessionToken={sessionToken || undefined} />
       ) : currentSection === "network" ? (
@@ -3893,136 +3953,13 @@ export default function Page() {
       ) : (
         <main className="page">
           <FileDialog isOpen={isFileDialogOpen} onClose={() => setIsFileDialogOpen(false)} />
-          <div className="panel-card" style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
-              <div>
-                <div className="panel-title">Project Nexus</div>
-                <div className="item-subtle">
-                  Logged in as <strong>{activeUser}</strong>
-                </div>
-              </div>
-              <button className="ghost" onClick={handleLogout} style={{ alignSelf: "flex-start" }}>
-                Logout
-              </button>
+          {statusMessage && (
+            <div className="status-banner" role="status">
+              {statusMessage}
             </div>
-            <div
-              className="login-row"
-              style={{ gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}
-            >
-              <span className="item-subtle" style={{ minWidth: 120 }}>
-                Theme mode
-              </span>
-              <select
-                className="filter"
-                value={globalThemeMode}
-                onChange={(event) => setGlobalThemeMode(event.target.value as GlobalThemeMode)}
-                style={{ minWidth: 160 }}
-              >
-                <option value="auto">Auto (OS)</option>
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
-              <span className="item-subtle" style={{ minWidth: 220, flex: 1 }}>
-                {selectedProject?.theme
-                  ? `Project overrides ${selectedProject.name}`
-                  : `Base ${resolvedGlobalThemeMode} theme`}
-              </span>
-            </div>
-            <div
-              className="login-row"
-              style={{ gap: 8, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}
-            >
-              <input
-                type="checkbox"
-                id="sidebar-animations"
-                checked={sidebarAnimationsEnabled}
-                onChange={(e) => setSidebarAnimationsEnabled(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <label
-                htmlFor="sidebar-animations"
-                className="item-subtle"
-                style={{ cursor: "pointer" }}
-              >
-                Enable sidebar animations
-              </label>
-            </div>
-            <div
-              className="login-row"
-              style={{ gap: 8, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}
-            >
-              <input
-                type="checkbox"
-                id="terminal-auto-open"
-                checked={autoOpenTerminal}
-                onChange={(e) => setAutoOpenTerminal(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <label
-                htmlFor="terminal-auto-open"
-                className="item-subtle"
-                style={{ cursor: "pointer" }}
-              >
-                Auto-open terminal on project selection
-              </label>
-            </div>
-            <div
-              className="login-row"
-              style={{ gap: 8, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}
-            >
-              <span className="item-subtle" style={{ minWidth: 120 }}>
-                Detail mode
-              </span>
-              <input
-                type="radio"
-                id="detail-mode-minimal"
-                name="detail-mode"
-                value="minimal"
-                checked={detailMode === "minimal"}
-                onChange={(e) => setDetailMode(e.target.value as "minimal" | "expanded")}
-                style={{ cursor: "pointer" }}
-              />
-              <label
-                htmlFor="detail-mode-minimal"
-                className="item-subtle"
-                style={{ cursor: "pointer" }}
-              >
-                Minimal
-              </label>
-              <input
-                type="radio"
-                id="detail-mode-expanded"
-                name="detail-mode"
-                value="expanded"
-                checked={detailMode === "expanded"}
-                onChange={(e) => setDetailMode(e.target.value as "minimal" | "expanded")}
-                style={{ cursor: "pointer" }}
-              />
-              <label
-                htmlFor="detail-mode-expanded"
-                className="item-subtle"
-                style={{ cursor: "pointer" }}
-              >
-                Expanded
-              </label>
-            </div>
-            {statusMessage && (
-              <div className="item-subtle" style={{ color: "#F59E0B", marginTop: 8 }}>
-                {statusMessage}
-              </div>
-            )}
-          </div>
+          )}
           <div className="columns">
-            <div
-              className={`column projects-column ${sidebarAnimationsEnabled ? "column-animated" : ""}`}
-            >
+            <div className="column projects-column column-animated">
               <header className="column-header">
                 <span>Projects</span>
                 <button
@@ -4175,9 +4112,7 @@ export default function Page() {
               </div>
             </div>
 
-            <div
-              className={`column roadmaps-column ${sidebarAnimationsEnabled ? "column-animated" : ""}`}
-            >
+            <div className="column roadmaps-column column-animated">
               <header className="column-header">
                 <span>Roadmap Lists</span>
               </header>
@@ -4321,9 +4256,7 @@ export default function Page() {
               </div>
             </div>
 
-            <div
-              className={`column chats-column ${sidebarAnimationsEnabled ? "column-animated" : ""}`}
-            >
+            <div className="column chats-column column-animated">
               <header className="column-header">
                 <span>Chats</span>
               </header>
@@ -4379,9 +4312,7 @@ export default function Page() {
               </div>
             </div>
 
-            <div
-              className={`column main-panel ${sidebarAnimationsEnabled ? "column-animated" : ""}`}
-            >
+            <div className="column main-panel column-animated">
               <header className="column-header">
                 <span>Main Panel</span>
                 <div className="tabs">
@@ -4400,152 +4331,288 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="panel-card" style={{ marginTop: 12 }}>
-            <div className="panel-title">Recent Activity</div>
-            <div className="panel-text">Latest file/terminal actions (backend DB required).</div>
-            <div className="login-row" style={{ gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <select
-                className="filter"
-                value={auditProjectId}
-                onChange={(e) => setAuditProjectId(e.target.value)}
+          {overlay && (
+            <div className="settings-overlay" onMouseDown={handleCloseOverlay}>
+              <div
+                className="settings-window"
+                onMouseDown={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
               >
-                <option value="">All projects</option>
-                {projects
-                  .filter((p) => p.id)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-              </select>
-              <select
-                className="filter"
-                value={auditFilters.eventType}
-                onChange={(e) =>
-                  setAuditFilters((prev) => ({ ...prev, eventType: e.target.value }))
-                }
-              >
-                <option value="">Any event</option>
-                {eventTypeOptions.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="filter"
-                placeholder="User ID"
-                value={auditFilters.userId}
-                onChange={(e) => setAuditFilters((prev) => ({ ...prev, userId: e.target.value }))}
-              />
-              <input
-                className="filter"
-                placeholder="IP address"
-                value={auditFilters.ipAddress}
-                onChange={(e) =>
-                  setAuditFilters((prev) => ({ ...prev, ipAddress: e.target.value }))
-                }
-                style={{ minWidth: 140 }}
-              />
-              <input
-                className="filter"
-                placeholder="Path contains"
-                value={auditFilters.pathContains}
-                onChange={(e) =>
-                  setAuditFilters((prev) => ({ ...prev, pathContains: e.target.value }))
-                }
-                style={{ flex: 1, minWidth: 160 }}
-              />
-              <select
-                className="filter"
-                value={auditSort}
-                onChange={(e) => {
-                  const value = e.target.value === "asc" ? "asc" : "desc";
-                  setAuditSort(value);
-                }}
-              >
-                <option value="desc">Newest first</option>
-                <option value="asc">Oldest first</option>
-              </select>
-              <button
-                className="tab"
-                onClick={() => loadAuditLog(auditProjectId || undefined, { reset: true })}
-                disabled={auditLoading}
-              >
-                Apply filters
-              </button>
-              <button
-                className="ghost"
-                onClick={() => {
-                  const cleared = { eventType: "", userId: "", pathContains: "", ipAddress: "" };
-                  setAuditFilters(cleared);
-                  loadAuditLog(auditProjectId || undefined, {
-                    reset: true,
-                    filtersOverride: cleared,
-                  });
-                }}
-                disabled={auditLoading}
-              >
-                Clear
-              </button>
-            </div>
-            <div className="login-row" style={{ gap: 8, marginBottom: 8 }}>
-              <button
-                className="tab"
-                onClick={() => loadAuditLog(auditProjectId || undefined, { reset: true })}
-                disabled={auditLoading}
-              >
-                {auditLoading ? "Loading…" : "Refresh"}
-              </button>
-              <button
-                className="ghost"
-                onClick={() => loadAuditLog(auditProjectId || undefined)}
-                disabled={!auditHasMore || auditLoading}
-              >
-                {auditLoading ? "Loading…" : auditHasMore ? "Load more" : "No more events"}
-              </button>
-            </div>
-            {auditError && (
-              <div className="item-subtle" style={{ color: "#EF4444" }}>
-                {auditError}
-              </div>
-            )}
-            <div className="list" style={{ maxHeight: 260, overflow: "auto" }}>
-              {auditEvents.length === 0 && <div className="item-subtle">No audit events yet.</div>}
-              {auditEvents.map((event) => (
-                <div className="item" key={event.id}>
-                  <div className="item-line">
-                    <span className="item-title">{event.eventType}</span>
-                    <span className="item-subtle">
-                      {new Date(event.createdAt).toLocaleTimeString()}
-                    </span>
+                <div className="settings-header">
+                  <div>
+                    <div className="settings-title">
+                      {overlay.kind === "settings" ? "Settings" : "Recent Activity"}
+                    </div>
+                    <div className="item-subtle">
+                      {overlay.kind === "settings"
+                        ? "Personalize Agent Manager"
+                        : "Latest file/terminal actions (backend DB required)."}
+                    </div>
                   </div>
-                  <div className="item-sub">{event.path ?? event.sessionId ?? "N/A"}</div>
-                  {(() => {
-                    const derivedIp =
-                      event.ipAddress ??
-                      (event.metadata &&
-                      typeof (event.metadata as Record<string, unknown>).ip === "string"
-                        ? String((event.metadata as Record<string, unknown>).ip)
-                        : null);
-                    return (
-                      <div className="item-subtle">
-                        user {event.userId ?? "—"} · session {event.sessionId ?? "—"} · project{" "}
-                        {event.projectId ?? "—"} · ip {derivedIp ?? "—"}
-                      </div>
-                    );
-                  })()}
-                  {(() => {
-                    const metaSummary = summarizeAuditMeta(event.metadata);
-                    return metaSummary ? (
-                      <div className="item-subtle">meta {metaSummary}</div>
-                    ) : null;
-                  })()}
+                  <button className="ghost" onClick={handleCloseOverlay}>
+                    Close
+                  </button>
                 </div>
-              ))}
-              {auditLoading && <div className="item-subtle">Loading…</div>}
+                {overlay.kind === "settings" ? (
+                  <div className="settings-body">
+                    <div className="settings-sidebar">
+                      {SETTINGS_SECTIONS.map((section) => (
+                        <button
+                          key={section.key}
+                          className={`settings-nav ${settingsCategory === section.key ? "active" : ""}`}
+                          onClick={() => setSettingsCategory(section.key)}
+                        >
+                          <span className="settings-nav-label">{section.label}</span>
+                          <span className="settings-nav-detail">{section.detail}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="settings-content">
+                      {settingsCategory === "appearance" ? (
+                        <div className="settings-group">
+                          <div className="settings-group-title">Theme mode</div>
+                          <div className="settings-group-description">
+                            Choose whether Agent Manager follows your OS, sticks to dark, or uses
+                            light mode.
+                          </div>
+                          <div className="settings-control-row">
+                            <select
+                              className="filter"
+                              value={globalThemeMode}
+                              onChange={(event) =>
+                                setGlobalThemeMode(event.target.value as GlobalThemeMode)
+                              }
+                              style={{ minWidth: 180 }}
+                            >
+                              <option value="auto">Auto (OS)</option>
+                              <option value="dark">Dark</option>
+                              <option value="light">Light</option>
+                            </select>
+                            <span className="item-subtle">
+                              {selectedProject?.theme
+                                ? `Overrides applied from ${selectedProject.name}`
+                                : `Using ${resolvedGlobalThemeMode} palette`}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="settings-stack">
+                          <div className="settings-group">
+                            <div className="settings-group-title">Workspace defaults</div>
+                            <div className="settings-group-description">
+                              Control how panels behave when you hop between projects.
+                            </div>
+                            <label className="settings-toggle">
+                              <input
+                                type="checkbox"
+                                checked={autoOpenTerminal}
+                                onChange={(e) => setAutoOpenTerminal(e.target.checked)}
+                              />
+                              <div>
+                                <div className="settings-toggle-title">
+                                  Auto-open terminal on project selection
+                                </div>
+                                <div className="settings-toggle-detail">
+                                  Open a terminal stream as soon as you pick a project.
+                                </div>
+                              </div>
+                            </label>
+                          </div>
+                          <div className="settings-group">
+                            <div className="settings-group-title">Detail mode</div>
+                            <div className="settings-group-description">
+                              Choose how much supporting text to show in lists.
+                            </div>
+                            <div className="settings-control-row" style={{ gap: 12 }}>
+                              <label className="settings-radio">
+                                <input
+                                  type="radio"
+                                  name="detail-mode"
+                                  value="minimal"
+                                  checked={detailMode === "minimal"}
+                                  onChange={(e) =>
+                                    setDetailMode(e.target.value as "minimal" | "expanded")
+                                  }
+                                />
+                                <span>Minimal</span>
+                              </label>
+                              <label className="settings-radio">
+                                <input
+                                  type="radio"
+                                  name="detail-mode"
+                                  value="expanded"
+                                  checked={detailMode === "expanded"}
+                                  onChange={(e) =>
+                                    setDetailMode(e.target.value as "minimal" | "expanded")
+                                  }
+                                />
+                                <span>Expanded</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="activity-body">
+                    <div className="activity-filters">
+                      <select
+                        className="filter"
+                        value={auditProjectId}
+                        onChange={(e) => setAuditProjectId(e.target.value)}
+                      >
+                        <option value="">All projects</option>
+                        {projects
+                          .filter((p) => p.id)
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </select>
+                      <select
+                        className="filter"
+                        value={auditFilters.eventType}
+                        onChange={(e) =>
+                          setAuditFilters((prev) => ({ ...prev, eventType: e.target.value }))
+                        }
+                      >
+                        <option value="">Any event</option>
+                        {eventTypeOptions.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="filter"
+                        placeholder="User ID"
+                        value={auditFilters.userId}
+                        onChange={(e) =>
+                          setAuditFilters((prev) => ({ ...prev, userId: e.target.value }))
+                        }
+                      />
+                      <input
+                        className="filter"
+                        placeholder="IP address"
+                        value={auditFilters.ipAddress}
+                        onChange={(e) =>
+                          setAuditFilters((prev) => ({ ...prev, ipAddress: e.target.value }))
+                        }
+                        style={{ minWidth: 140 }}
+                      />
+                      <input
+                        className="filter"
+                        placeholder="Path contains"
+                        value={auditFilters.pathContains}
+                        onChange={(e) =>
+                          setAuditFilters((prev) => ({ ...prev, pathContains: e.target.value }))
+                        }
+                        style={{ flex: 1, minWidth: 160 }}
+                      />
+                      <select
+                        className="filter"
+                        value={auditSort}
+                        onChange={(e) => {
+                          const value = e.target.value === "asc" ? "asc" : "desc";
+                          setAuditSort(value);
+                        }}
+                      >
+                        <option value="desc">Newest first</option>
+                        <option value="asc">Oldest first</option>
+                      </select>
+                      <button
+                        className="tab"
+                        onClick={() => loadAuditLog(auditProjectId || undefined, { reset: true })}
+                        disabled={auditLoading}
+                      >
+                        Apply filters
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() => {
+                          const cleared = {
+                            eventType: "",
+                            userId: "",
+                            pathContains: "",
+                            ipAddress: "",
+                          };
+                          setAuditFilters(cleared);
+                          loadAuditLog(auditProjectId || undefined, {
+                            reset: true,
+                            filtersOverride: cleared,
+                          });
+                        }}
+                        disabled={auditLoading}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="activity-actions">
+                      <button
+                        className="tab"
+                        onClick={() => loadAuditLog(auditProjectId || undefined, { reset: true })}
+                        disabled={auditLoading}
+                      >
+                        {auditLoading ? "Loading…" : "Refresh"}
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() => loadAuditLog(auditProjectId || undefined)}
+                        disabled={!auditHasMore || auditLoading}
+                      >
+                        {auditLoading ? "Loading…" : auditHasMore ? "Load more" : "No more events"}
+                      </button>
+                    </div>
+                    {auditError && (
+                      <div className="item-subtle" style={{ color: "#EF4444" }}>
+                        {auditError}
+                      </div>
+                    )}
+                    <div className="activity-list">
+                      {auditEvents.length === 0 && (
+                        <div className="item-subtle">No audit events yet.</div>
+                      )}
+                      {auditEvents.map((event) => (
+                        <div className="item" key={event.id}>
+                          <div className="item-line">
+                            <span className="item-title">{event.eventType}</span>
+                            <span className="item-subtle">
+                              {new Date(event.createdAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <div className="item-sub">{event.path ?? event.sessionId ?? "N/A"}</div>
+                          {(() => {
+                            const derivedIp =
+                              event.ipAddress ??
+                              (event.metadata &&
+                              typeof (event.metadata as Record<string, unknown>).ip === "string"
+                                ? String((event.metadata as Record<string, unknown>).ip)
+                                : null);
+                            return (
+                              <div className="item-subtle">
+                                user {event.userId ?? "—"} · session {event.sessionId ?? "—"} ·
+                                project {event.projectId ?? "—"} · ip {derivedIp ?? "—"}
+                              </div>
+                            );
+                          })()}
+                          {(() => {
+                            const metaSummary = summarizeAuditMeta(event.metadata);
+                            return metaSummary ? (
+                              <div className="item-subtle">meta {metaSummary}</div>
+                            ) : null;
+                          })()}
+                        </div>
+                      ))}
+                      {auditLoading && <div className="item-subtle">Loading…</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
           {contextPanel && (
             <div className="context-panel">
               <div className="context-panel-header">
@@ -4699,6 +4766,44 @@ export default function Page() {
                   {action.label}
                 </button>
               ))}
+            </div>
+          )}
+          {accountMenu && (
+            <div
+              className="context-menu account-menu"
+              style={{ top: accountMenu.y, left: accountMenu.x }}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onContextMenu={(event) => event.stopPropagation()}
+            >
+              <div className="account-menu-header">
+                <div className="item-subtle">Signed in as</div>
+                <div className="account-menu-user">{activeUser ?? "Guest"}</div>
+              </div>
+              <button
+                type="button"
+                className="context-menu-item"
+                onClick={() => handleOpenSettings()}
+              >
+                Settings
+              </button>
+              <button
+                type="button"
+                className="context-menu-item"
+                onClick={() => handleOpenActivity()}
+              >
+                Recent activity
+              </button>
+              <button
+                type="button"
+                className="context-menu-item"
+                onClick={() => {
+                  setAccountMenu(null);
+                  handleLogout();
+                }}
+              >
+                Logout
+              </button>
             </div>
           )}
         </main>

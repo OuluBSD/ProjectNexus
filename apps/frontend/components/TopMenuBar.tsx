@@ -6,13 +6,27 @@
 import { type MouseEvent } from "react";
 
 export type AppSection = "agent-manager" | "ai-chat" | "network";
+type AccountMenuHandler = (event: MouseEvent<HTMLButtonElement>) => void;
 
 interface TopMenuBarProps {
   currentSection: AppSection;
   onSectionChange: (section: AppSection) => void;
+  activeUser?: string | null;
+  onAccountMenuToggle?: AccountMenuHandler;
 }
 
-export function TopMenuBar({ currentSection, onSectionChange }: TopMenuBarProps) {
+export function TopMenuBar({
+  currentSection,
+  onSectionChange,
+  activeUser,
+  onAccountMenuToggle,
+}: TopMenuBarProps) {
+  const handleAccountClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (onAccountMenuToggle) {
+      onAccountMenuToggle(event);
+    }
+  };
+
   return (
     <div className="top-menu-bar">
       <div className="menu-bar-brand">
@@ -42,6 +56,11 @@ export function TopMenuBar({ currentSection, onSectionChange }: TopMenuBarProps)
       </div>
 
       <div className="menu-bar-spacer" />
+
+      <button className="menu-bar-account" onClick={handleAccountClick}>
+        <span className="menu-bar-account-label">Account</span>
+        <span className="menu-bar-account-user">{activeUser ?? "Guest"}</span>
+      </button>
     </div>
   );
 }

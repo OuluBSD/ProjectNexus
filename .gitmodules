@@ -1,3 +1,3 @@
 [submodule "deps/qwen-code"]
 	path = deps/qwen-code
-	url = /home/sblo/Dev/qwen-code/
+	url = https://github.com/OuluBSD/qwen-code.git

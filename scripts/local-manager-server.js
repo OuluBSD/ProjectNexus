@@ -7,6 +7,8 @@
  */
 const http = require("node:http");
 const { spawn } = require("node:child_process");
+const { existsSync } = require("node:fs");
+const path = require("node:path");
 const readline = require("node:readline");
 const WebSocketLib = require("ws");
 const WebSocketServer =
@@ -17,6 +19,31 @@ const host = process.env.LOCAL_MANAGER_HOST || "127.0.0.1";
 const port = Number(process.env.LOCAL_MANAGER_PORT || 4301);
 const workerPort = Number(process.env.LOCAL_WORKER_PORT || 4302);
 const aiPort = Number(process.env.LOCAL_AI_PORT || 4303);
+const repoRoot = path.resolve(__dirname, "..");
+const repoQwenPath = path.join(repoRoot, "deps", "qwen-code", "script", "qwen-code");
+const homeQwenPath = path.join(
+  process.env.HOME || process.env.USERPROFILE || "",
+  "Dev",
+  "qwen-code",
+  "script",
+  "qwen-code"
+);
+
+function expandHome(p) {
+  if (!p) return "";
+  if (p.startsWith("~/")) {
+    return path.join(process.env.HOME || process.env.USERPROFILE || "", p.slice(2));
+  }
+  return p;
+}
+
+function getQwenPath() {
+  const override = expandHome(process.env.QWEN_PATH);
+  if (override) return override;
+  if (existsSync(repoQwenPath)) return repoQwenPath;
+  if (existsSync(homeQwenPath)) return homeQwenPath;
+  return repoQwenPath;
+}
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -73,7 +100,7 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 
 function attachAiProxy(ws) {
-  const qwenPath = process.env.QWEN_PATH || `${process.env.HOME}/Dev/qwen-code/script/qwen-code`;
+  const qwenPath = getQwenPath();
   const workspace = process.env.LOCAL_WORKER_REPO || process.cwd();
   const model = process.env.DEFAULT_AI_MODEL || "qwen-2.5-flash";
 

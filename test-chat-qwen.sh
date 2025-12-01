@@ -16,6 +16,7 @@ exit 0
 
 # Old Node.js implementation below (kept for reference)
 exec node - <<'EOF'
+const path = require('path');
 const { spawn } = require('child_process');
 const readline = require('readline');
 
@@ -28,8 +29,9 @@ const colors = {
   reset: '\x1b[0m'
 };
 
-// Get qwen-code path from environment
-const qwenPath = process.env.QWEN_CODE_SCRIPT || process.env.HOME + '/Dev/qwen-code/script/qwen-code';
+// Get qwen-code path from environment or local submodule
+const defaultQwenPath = path.resolve(process.cwd(), 'deps/qwen-code/script/qwen-code');
+const qwenPath = process.env.QWEN_CODE_SCRIPT || process.env.QWEN_PATH || defaultQwenPath;
 const workspaceRoot = process.cwd();
 
 console.log(`${colors.blue}Spawning qwen-code backend...${colors.reset}`);

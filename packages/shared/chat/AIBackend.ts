@@ -4,6 +4,7 @@
  */
 
 import type { ChatMessage, ChatStatus } from "./types";
+import { resolveQwenPath } from "../qwenPath.js";
 
 export type AIBackendType = "qwen" | "claude" | "gemini" | "codex";
 
@@ -74,7 +75,7 @@ export function normalizeBackendMessage(
 export function getDefaultBackendPath(type: AIBackendType, homeDir: string): string {
   switch (type) {
     case "qwen":
-      return `${homeDir}/Dev/qwen-code/script/qwen-code`;
+      return resolveQwenPath();
     case "claude":
       return `${homeDir}/Dev/claude-code/script/claude-code`;
     case "gemini":

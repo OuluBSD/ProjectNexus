@@ -3,6 +3,7 @@ import {
   addSnapshot,
   createProject,
   getProject,
+  deleteProject,
   listProjects,
   listRoadmaps,
   listSnapshots,
@@ -14,6 +15,7 @@ import {
   dbListProjects,
   dbListSnapshots,
   dbProjectDetails,
+  dbDeleteProject,
   dbUpdateProject,
 } from "../services/projectRepository";
 import { requireSession } from "../utils/auth";
@@ -110,6 +112,48 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
         changes: body,
       },
     });
+  });
+
+  fastify.delete("/projects/:projectId", async (request, reply) => {
+    const session = await requireSession(request, reply);
+    if (!session) return;
+
+    const projectId = (request.params as { projectId: string }).projectId;
+    let deletedProject: { name?: string; category?: string; status?: string } | null = null;
+    let deleted = false;
+
+    if (fastify.db) {
+      try {
+        const result = await dbDeleteProject(fastify.db, projectId);
+        deleted = result.deleted;
+        deletedProject = result.project;
+      } catch (err) {
+        fastify.log.error({ err }, "Failed to delete project in database; falling back to memory.");
+      }
+    }
+
+    if (!deleted) {
+      const removed = deleteProject(projectId);
+      if (!removed) {
+        reply.code(404).send({ error: { code: "not_found", message: "Project not found" } });
+        return;
+      }
+      deleted = true;
+      deletedProject = removed;
+    }
+
+    await recordAuditEvent(fastify, {
+      userId: session.userId,
+      projectId,
+      eventType: "project:delete",
+      metadata: {
+        name: deletedProject?.name,
+        category: deletedProject?.category,
+        status: deletedProject?.status,
+      },
+    });
+
+    reply.code(204).send();
   });
 
   fastify.get("/projects/:projectId/details", async (request, reply) => {

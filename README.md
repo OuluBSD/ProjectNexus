@@ -148,6 +148,10 @@ For endpoint-level details, see `ARCHITECTURE.md`.
 ## Quick "Hello World"
 
 ```bash
+# 0. Clone with submodules (includes bundled qwen-code)
+git clone --recurse-submodules https://github.com/<your-org>/AgentManager.git
+cd AgentManager
+
 # 1. Install dependencies
 pnpm install
 

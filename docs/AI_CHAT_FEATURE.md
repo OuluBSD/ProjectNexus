@@ -139,7 +139,7 @@ import { GenericAIBackend, type AIBackendConfig } from "@nexus/shared/chat";
 
 const config: AIBackendConfig = {
   type: "qwen",
-  backendPath: "/path/to/qwen-code/script/qwen-code",
+  backendPath: "./deps/qwen-code/script/qwen-code",
   workspaceRoot: "/workspace/path",
   disableTools: true, // Disable tool usage
   disableFilesystem: true, // Disable filesystem access

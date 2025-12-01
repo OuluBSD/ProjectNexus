@@ -6,6 +6,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import * as readline from "node:readline";
 import { QwenChatSession } from "@nexus/shared/chat";
+import { resolveQwenPath } from "@nexus/shared/qwenPath";
 
 export interface QwenChatClientConfig {
   qwenPath?: string;
@@ -27,8 +28,7 @@ export class QwenChatClient {
   }
 
   async start(): Promise<void> {
-    const homeDir = process.env.HOME || "";
-    const qwenPath = this.config.qwenPath ?? `${homeDir}/Dev/qwen-code/script/qwen-code`;
+    const qwenPath = resolveQwenPath(this.config.qwenPath);
     const workspaceRoot = this.config.workspaceRoot ?? process.cwd();
 
     this.session.setStatus({ state: "connecting", message: "Starting qwen-code..." });

@@ -177,6 +177,16 @@ export async function dbUpdateProject(
   return row ? mapProject(row) : null;
 }
 
+export async function dbDeleteProject(
+  db: Database,
+  projectId: string
+): Promise<{ deleted: boolean; project: Project | null }> {
+  const project = await dbGetProject(db, projectId);
+  if (!project) return { deleted: false, project: null };
+  await db.delete(schema.projects).where(eq(schema.projects.id, projectId));
+  return { deleted: true, project };
+}
+
 export async function dbListRoadmaps(db: Database, projectId: string): Promise<RoadmapList[]> {
   const rows = await db
     .select()

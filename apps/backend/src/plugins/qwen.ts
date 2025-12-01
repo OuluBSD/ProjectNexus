@@ -5,12 +5,13 @@
  * The Qwen server should be started separately (manually, via systemd, or docker).
  *
  * To start Qwen server:
- *   ~/Dev/qwen-code/bin/Qwen --mode tcp --port 7777 --workspace /path/to/workspace
+ *   ./deps/qwen-code/bin/Qwen --mode tcp --port 7777 --workspace /path/to/workspace
  */
 
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import { QwenClient } from "../services/qwenClient.js";
+import { resolveQwenPath } from "@nexus/shared/qwenPath";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -29,8 +30,7 @@ const qwenPluginFunction: FastifyPluginAsync = async (fastify) => {
 
   // Get configuration from environment
   const mode = (process.env.QWEN_MODE || "stdio") as "stdio" | "tcp";
-  const homeDir = process.env.HOME || "";
-  const qwenPath = process.env.QWEN_PATH || `${homeDir}/Dev/qwen-code/script/qwen-code`;
+  const qwenPath = resolveQwenPath();
 
   fastify.log.info(`[QwenPlugin] Starting Qwen client in ${mode} mode`);
 

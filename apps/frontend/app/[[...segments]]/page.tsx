@@ -32,6 +32,7 @@ import {
   ProjectPayload,
   ProjectDetailsResponse,
   updateProject,
+  deleteProject,
   updateRoadmap,
 } from "../../lib/api";
 import { TemplatePanel } from "../../components/TemplatePanel";
@@ -197,6 +198,7 @@ const contextActionConfig: Record<ContextTarget, { key: string; label: string }[
     { key: "edit", label: "Edit project" },
     { key: "settings", label: "Project settings" },
     { key: "templates", label: "Favorite templates" },
+    { key: "remove", label: "Remove project" },
   ],
   roadmap: [
     { key: "edit", label: "Edit roadmap" },
@@ -312,155 +314,6 @@ const autoDemoWorkspace = {
   server: "qwen-backend server",
   aiChat: "AI chat: qwen-backend",
 };
-
-type DemoSeedChat = {
-  title: string;
-  goal?: string;
-  status?: Status;
-  progress?: number;
-  metadata?: Record<string, unknown>;
-  starterMessages?: { role: MessageItem["role"]; content: string }[];
-};
-
-const demoSeeds: {
-  key: string;
-  project: {
-    name: string;
-    category: string;
-    status: Status;
-    description: string;
-    theme?: ThemeOverride;
-  };
-  roadmap: { title: string; tags: string[]; progress: number; status: Status };
-  workspace?: typeof autoDemoWorkspace;
-  chats: DemoSeedChat[];
-}[] = [
-  {
-    key: "nexus",
-    project: {
-      name: "Nexus",
-      category: "Product",
-      status: "active",
-      description: "Multi-agent cockpit",
-      theme: projectThemePresets.nebula,
-    },
-    roadmap: {
-      title: "MVP Core",
-      tags: ["api", "db"],
-      progress: 0.42,
-      status: "in_progress" as Status,
-    },
-    chats: [
-      {
-        title: "Implement FS API",
-        goal: "Expose safe FS endpoints",
-        status: "in_progress" as Status,
-        progress: 0.35,
-        metadata: {
-          focus: "Run the qwen-backed auto demo in this chat",
-          workspacePath: autoDemoWorkspace.path,
-          gitRepo: autoDemoWorkspace.repo,
-          manager: autoDemoWorkspace.manager,
-          server: autoDemoWorkspace.server,
-          aiChat: autoDemoWorkspace.aiChat,
-        },
-      },
-      {
-        title: "AI Demo",
-        goal: "Run the qwen-backed auto demo inside the main chat view.",
-        status: "active" as Status,
-        progress: 0.18,
-        metadata: {
-          focus: "Kick off the auto-demo calc script via qwen",
-          workspacePath: autoDemoWorkspace.path,
-          gitRepo: autoDemoWorkspace.repo,
-          manager: autoDemoWorkspace.manager,
-          server: autoDemoWorkspace.server,
-          aiChat: autoDemoWorkspace.aiChat,
-        },
-        starterMessages: [
-          {
-            role: "assistant",
-            content: `✦ Auto demo ready: run qwen to write and execute a tiny script.\n\n\`\`\`bash\n# Shell\ncd ${autoDemoWorkspace.path}\nls -la\n\`\`\`\n\nAttached: manager, server, ai-chat and git repo.`,
-          },
-          {
-            role: "assistant",
-            content:
-              "✦ Press “Run AI demo (qwen)” above to let the agent create a Python script that prints 123×456 and execute it safely in the attached repo.",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    key: "auto-demo",
-    project: {
-      name: "Automatic Demo",
-      category: "Demo",
-      status: "active",
-      description: `Dedicated demo workspace at ${autoDemoWorkspace.path} with git enabled for backend agent flows.`,
-      theme: projectThemePresets.ice,
-    },
-    roadmap: {
-      title: "Qwen Backend",
-      tags: ["qwen", "backend", "demo"],
-      progress: 0.15,
-      status: "in_progress" as Status,
-    },
-    workspace: autoDemoWorkspace,
-    chats: [
-      {
-        title: "Wire Qwen backend",
-        goal: "Follow qwen-backend session to start writing code in the demo repo.",
-        status: "active" as Status,
-        progress: 0.12,
-        metadata: {
-          workspacePath: autoDemoWorkspace.path,
-          gitRepo: autoDemoWorkspace.repo,
-          manager: autoDemoWorkspace.manager,
-          server: autoDemoWorkspace.server,
-          aiChat: autoDemoWorkspace.aiChat,
-        },
-        starterMessages: [
-          {
-            role: "assistant",
-            content: `✦ I need to stage the modified file that is not staged yet:\n\n\`\`\`bash\n# Shell\ncd ${autoDemoWorkspace.path}\n2 git status --short\n4 git add uppsrc/Qwen/QwenTCPServer.cpp\n\`\`\``,
-          },
-          {
-            role: "assistant",
-            content:
-              '✦ Now let me check the differences in the C++ file:\n\n```bash\n# Shell\ngit diff uppsrc/Qwen/QwenTCPServer.cpp\n```\n\n```\ndiff --git a/uppsrc/Qwen/QwenTCPServer.cpp b/uppsrc/Qwen/QwenTCPServer.cpp\nindex 844a81a2..02744353 100644\n--- a/uppsrc/Qwen/QwenTCPServer.cpp\n+++ b/uppsrc/Qwen/QwenTCPServer.cpp\n@@ -208,7 +208,7 @@ bool QwenTCPServer::start(int port, const std::string& host) {\n              // In a real implementation, we would route to the specific client that made the request\n              std::string response = "{";\n              response += "\\"type\\":\\"assistant_response\\",";\n-             response += "\\"content\\":" + std::string("\\"") + msg.content + std::string("\\"");\n+             response += "\\"content\\":\\"" + json_escape(msg.content) + "\\"";\n              response += "}\\n";\n \n              // Send to all connected clients\n```\n',
-          },
-        ],
-      },
-      {
-        title: "Implement FS API",
-        goal: "Follow the qwen-backend session to implement a filesystem API in the demo repo.",
-        status: "in_progress" as Status,
-        progress: 0.22,
-        metadata: {
-          focus: "Write FS API code into the auto-demo git repo",
-          workspacePath: autoDemoWorkspace.path,
-          gitRepo: autoDemoWorkspace.repo,
-          manager: autoDemoWorkspace.manager,
-          server: autoDemoWorkspace.server,
-          aiChat: autoDemoWorkspace.aiChat,
-        },
-        starterMessages: [
-          {
-            role: "assistant",
-            content: `✦ Setting up the auto-demo workspace and manager/server links:\n\n\`\`\`bash\n# Shell\ncd ${autoDemoWorkspace.path}\nls -la\n\`\`\`\n\nAttached: manager, server, ai-chat and git repo.`,
-          },
-          {
-            role: "assistant",
-            content:
-              '✦ Drafting the filesystem API handler:\n\n```bash\n# Shell\necho "// FS API demo stub" > api/fs_api.cpp\n```\n\n```\ndiff --git a/api/fs_api.cpp b/api/fs_api.cpp\nnew file mode 100644\n--- /dev/null\n+++ b/api/fs_api.cpp\n@@\n+#include <string>\n+#include <filesystem>\n+\n+std::string listDir(const std::string& root) {\n+    std::string out;\n+    for (const auto& entry : std::filesystem::directory_iterator(root)) {\n+        out += entry.path().string();\n+        out += \"\\n\";\n+    }\n+    return out;\n+}\n```\n',
-          },
-        ],
-      },
-    ],
-  },
-];
 
 type DemoStepItem = {
   kind: "text" | "command" | "diff";
@@ -869,11 +722,16 @@ export default function Page() {
   const [keyfileToken, setKeyfileToken] = useState(DEMO_KEYFILE ?? "");
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [projectRemovalPrompt, setProjectRemovalPrompt] = useState<{
+    project: ProjectItem;
+    ready: boolean;
+    submitting: boolean;
+    error?: string | null;
+  } | null>(null);
   const openFolderForChatRef = useRef<((chat: ChatItem | null) => void) | null>(null);
   const [globalThemeMode, setGlobalThemeMode] = useState<GlobalThemeMode>("auto");
   const TERMINAL_AUTO_OPEN_KEY = "agentmgr:terminalAutoOpen";
@@ -934,7 +792,6 @@ export default function Page() {
   const [chatProgressDraft, setChatProgressDraft] = useState<string>("0");
   const [chatFocusDraft, setChatFocusDraft] = useState("");
   const [chatUpdateMessage, setChatUpdateMessage] = useState<string | null>(null);
-  const autoSeededRef = useRef(false);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [auditFilters, setAuditFilters] = useState<{
     eventType: string;
@@ -1301,6 +1158,20 @@ export default function Page() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [overlay]);
+
+  useEffect(() => {
+    if (!projectRemovalPrompt) return;
+    const timer = setTimeout(
+      () =>
+        setProjectRemovalPrompt((prev) =>
+          prev && prev.project.id === projectRemovalPrompt.project.id
+            ? { ...prev, ready: true }
+            : prev
+        ),
+      2000
+    );
+    return () => clearTimeout(timer);
+  }, [projectRemovalPrompt?.project.id]);
 
   const ensureStatus = useCallback(
     async (roadmapId: string, token: string, options?: { forceRefresh?: boolean }) => {
@@ -1725,7 +1596,7 @@ export default function Page() {
         const mappedProjects = projectData.map(mapProjectPayload);
         setProjects(mappedProjects);
         setStatusMessage(
-          projectData.length ? null : "No projects found. Seed demo data to get started."
+          projectData.length ? null : "No projects found. Create a project to get started."
         );
         const preferredProjectId =
           hintedProjectId ??
@@ -1747,7 +1618,7 @@ export default function Page() {
           setChats([]);
           setSelectedProjectId(null);
           setSelectedRoadmapId(null);
-          setStatusMessage("No projects found. Seed demo data to get started.");
+          setStatusMessage("No projects found. Create a project to get started.");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load projects");
@@ -2073,6 +1944,14 @@ export default function Page() {
     setStatusMessage(`Editing roadmap ${roadmap.title}.`);
   }, []);
 
+  const startProjectRemovalPrompt = useCallback((project: ProjectItem) => {
+    setProjectRemovalPrompt({ project, ready: false, submitting: false, error: null });
+  }, []);
+
+  const cancelProjectRemovalPrompt = useCallback(() => {
+    setProjectRemovalPrompt(null);
+  }, []);
+
   const promptWithDelay = (message: string, defaultValue?: string) =>
     new Promise<string | null>((resolve) => {
       if (typeof window === "undefined") {
@@ -2102,6 +1981,18 @@ export default function Page() {
           case "templates":
             openProjectTemplatesPanel(project);
             nextMessage = `Showing templates for ${project.name}.`;
+            break;
+          case "remove":
+            if (!project.id) {
+              nextMessage = "Project identifier missing.";
+              break;
+            }
+            if (!sessionToken) {
+              nextMessage = "Login required to remove projects.";
+              break;
+            }
+            startProjectRemovalPrompt(project);
+            nextMessage = `Confirm removal for ${project.name}. Press Y to approve or N to cancel.`;
             break;
         }
       }
@@ -2302,11 +2193,188 @@ export default function Page() {
       setSelectedChatId,
       setStatusMessage,
       startProjectEdit,
+      startProjectRemovalPrompt,
       startRoadmapEdit,
       openRoadmapContextPanel,
       syncUrlSelection,
     ]
   );
+
+  const confirmProjectRemoval = useCallback(async () => {
+    if (!projectRemovalPrompt?.project.id) {
+      setStatusMessage("Project identifier unavailable.");
+      setProjectRemovalPrompt(null);
+      return;
+    }
+    if (!sessionToken) {
+      setStatusMessage("Login to remove projects.");
+      return;
+    }
+    if (!projectRemovalPrompt.ready || projectRemovalPrompt.submitting) return;
+
+    setProjectRemovalPrompt((prev) => (prev ? { ...prev, submitting: true, error: null } : prev));
+
+    const roadmapIdsForRemoval =
+      selectedProjectId === projectRemovalPrompt.project.id
+        ? roadmaps.map((roadmap) => roadmap.id).filter((id): id is string => Boolean(id))
+        : [];
+
+    try {
+      await deleteProject(sessionToken, projectRemovalPrompt.project.id);
+      setProjects((prev) =>
+        prev.filter((project) => project.id !== projectRemovalPrompt.project.id)
+      );
+
+      if (selectedProjectId === projectRemovalPrompt.project.id) {
+        const trimmedStatus = { ...roadmapStatusRef.current };
+        roadmapIdsForRemoval.forEach((id) => delete trimmedStatus[id]);
+        roadmapStatusRef.current = trimmedStatus;
+        setRoadmapStatus(trimmedStatus);
+        setMetaChats((prev) => {
+          if (!roadmapIdsForRemoval.length) return prev;
+          const next = { ...prev };
+          roadmapIdsForRemoval.forEach((id) => delete next[id]);
+          return next;
+        });
+        setSelectedProjectId(null);
+        setSelectedRoadmapId(null);
+        setSelectedChatId(null);
+        setRoadmaps([]);
+        setChats([]);
+        setMessages([]);
+        setMessagesError(null);
+        setContextPanel(null);
+        setActiveTab("Chat");
+        setChatTabState({});
+        setEditingProjectId(null);
+        setEditingRoadmapId(null);
+        setProjectDraft({ name: "", category: "", description: "" });
+        setRoadmapDraft({ title: "", tagsInput: "" });
+        setChatDraft({ title: "", goal: "" });
+        setCreatingProject(false);
+        setCreatingRoadmap(false);
+        setCreatingChat(false);
+        setUpdatingProject(false);
+        setUpdatingRoadmap(false);
+        setMessageDraft("");
+        setChatStatusDraft("in_progress");
+        setChatProgressDraft("0");
+        setChatFocusDraft("");
+        setChatUpdateMessage(null);
+        setAuditProjectId((prev) => (prev === projectRemovalPrompt.project.id ? "" : prev));
+        setFsEntries([]);
+        setFsContent("");
+        setFsContentPath(null);
+        setFsPath(".");
+        setFsDraft("");
+        setFsLoading(false);
+        setFsSaving(false);
+        setFsSaveStatus(null);
+        setFsError(null);
+        setFsDiff("");
+        setFsDiffError(null);
+        setFsDiffLoaded(false);
+        setFsDiffLoading(false);
+        setFsBaseSha("");
+        setFsTargetSha("HEAD");
+        setFsToast(null);
+        setTerminalSessionId(null);
+        setTerminalOutput("Connect to stream to see output.");
+        setTerminalStatus(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(PROJECT_STORAGE_KEY);
+          localStorage.removeItem(ROADMAP_STORAGE_KEY);
+          localStorage.removeItem(CHAT_STORAGE_KEY);
+        }
+      } else {
+        setAuditProjectId((prev) => (prev === projectRemovalPrompt.project.id ? "" : prev));
+      }
+
+      setStatusMessage(`Removed ${projectRemovalPrompt.project.name}.`);
+      setProjectRemovalPrompt(null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to remove project; try again later.";
+      setStatusMessage(message);
+      setProjectRemovalPrompt((prev) =>
+        prev ? { ...prev, submitting: false, error: message } : prev
+      );
+    }
+  }, [
+    projectRemovalPrompt,
+    roadmaps,
+    selectedProjectId,
+    sessionToken,
+    setActiveTab,
+    setAuditProjectId,
+    setChatDraft,
+    setChatFocusDraft,
+    setChatProgressDraft,
+    setChatStatusDraft,
+    setChatTabState,
+    setChatUpdateMessage,
+    setCreatingChat,
+    setCreatingProject,
+    setCreatingRoadmap,
+    setChats,
+    setContextPanel,
+    setEditingProjectId,
+    setEditingRoadmapId,
+    setFsBaseSha,
+    setFsContent,
+    setFsContentPath,
+    setFsDiff,
+    setFsDiffError,
+    setFsDiffLoaded,
+    setFsDiffLoading,
+    setFsDraft,
+    setFsEntries,
+    setFsError,
+    setFsLoading,
+    setFsPath,
+    setFsSaveStatus,
+    setFsSaving,
+    setFsTargetSha,
+    setFsToast,
+    setMetaChats,
+    setMessageDraft,
+    setMessages,
+    setMessagesError,
+    setProjectDraft,
+    setProjects,
+    setProjectRemovalPrompt,
+    setRoadmapDraft,
+    setRoadmapStatus,
+    setRoadmaps,
+    setSelectedChatId,
+    setSelectedProjectId,
+    setSelectedRoadmapId,
+    setUpdatingProject,
+    setUpdatingRoadmap,
+    setStatusMessage,
+    setTerminalOutput,
+    setTerminalSessionId,
+    setTerminalStatus,
+  ]);
+
+  useEffect(() => {
+    if (!projectRemovalPrompt || typeof window === "undefined") return;
+    const handleKey = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (key === "y") {
+        if (projectRemovalPrompt.ready && !projectRemovalPrompt.submitting) {
+          event.preventDefault();
+          void confirmProjectRemoval();
+        }
+      }
+      if (key === "n" || event.key === "escape") {
+        event.preventDefault();
+        cancelProjectRemovalPrompt();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [cancelProjectRemovalPrompt, confirmProjectRemoval, projectRemovalPrompt]);
 
   const handleLoginSubmit = async () => {
     if (!username) {
@@ -2331,83 +2399,6 @@ export default function Page() {
       setLoading(false);
     }
   };
-
-  const seedDemoData = useCallback(async () => {
-    if (!sessionToken) {
-      setStatusMessage("Login to seed demo data.");
-      return;
-    }
-    setSeeding(true);
-    setStatusMessage("Preparing demo projects and chats…");
-    setError(null);
-    try {
-      const existingProjects = await fetchProjects(sessionToken);
-      const projectCache = [...existingProjects];
-      const alreadySeeded = demoSeeds.every((seed) =>
-        projectCache.some((p) => p.name === seed.project.name)
-      );
-      if (alreadySeeded) {
-        setStatusMessage("Demo data already present.");
-        setSeeding(false);
-        return;
-      }
-      for (const seed of demoSeeds) {
-        const existingProject = projectCache.find((p) => p.name === seed.project.name);
-        let projectId = existingProject?.id ?? null;
-        if (!projectId) {
-          const { id } = await createProject(sessionToken, seed.project);
-          projectId = id;
-          projectCache.push({ ...seed.project, id });
-        }
-        if (!projectId) continue;
-
-        const roadmapList = await fetchRoadmaps(sessionToken, projectId);
-        let roadmapId = roadmapList.find((r) => r.title === seed.roadmap.title)?.id ?? null;
-        if (!roadmapId) {
-          const { id } = await createRoadmap(sessionToken, projectId, seed.roadmap);
-          roadmapId = id;
-        }
-        if (!roadmapId) continue;
-
-        const existingChats = await fetchChats(sessionToken, roadmapId);
-        for (const chatSeed of seed.chats) {
-          const existingChat = existingChats.find((chat) => chat.title === chatSeed.title);
-          let chatId = existingChat?.id ?? null;
-          const createdChat = !chatId;
-          if (!chatId) {
-            const { id } = await createChat(sessionToken, roadmapId, {
-              title: chatSeed.title,
-              goal: chatSeed.goal,
-              status: chatSeed.status,
-              progress: chatSeed.progress,
-              metadata: chatSeed.metadata,
-            });
-            chatId = id;
-          }
-          if (createdChat && chatId && chatSeed.starterMessages?.length) {
-            for (const starter of chatSeed.starterMessages) {
-              await postChatMessage(sessionToken, chatId, starter);
-            }
-          }
-        }
-      }
-      setStatusMessage("Demo data ready.");
-      await hydrateWorkspace(sessionToken, activeUser ?? username ?? DEMO_USERNAME);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to seed demo data";
-      setError(message);
-      setStatusMessage("Failed to seed demo data.");
-    } finally {
-      setSeeding(false);
-    }
-  }, [activeUser, hydrateWorkspace, sessionToken, username]);
-
-  useEffect(() => {
-    if (sessionToken && !autoSeededRef.current) {
-      autoSeededRef.current = true;
-      seedDemoData();
-    }
-  }, [seedDemoData, sessionToken]);
 
   const handleCreateProject = useCallback(async () => {
     if (!sessionToken) {
@@ -3962,14 +3953,6 @@ export default function Page() {
             <div className="column projects-column column-animated">
               <header className="column-header">
                 <span>Projects</span>
-                <button
-                  className="ghost"
-                  onClick={seedDemoData}
-                  disabled={!sessionToken || seeding || loading}
-                  title={sessionToken ? "" : "Login to create demo data"}
-                >
-                  {seeding ? "Seeding…" : "Seed demo"}
-                </button>
               </header>
               {selectedProject && (
                 <div className="item-subtle project-context">
@@ -4074,7 +4057,7 @@ export default function Page() {
                   <div className="item-subtle">
                     {projects.length === 0
                       ? sessionToken
-                        ? "No projects yet. Seed demo data to populate the lists."
+                        ? "No projects yet. Create a project to populate the lists."
                         : "No projects yet. Login to load data."
                       : normalizedProjectFilter
                         ? `No projects match "${normalizedProjectFilter}".`
@@ -4610,6 +4593,52 @@ export default function Page() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {projectRemovalPrompt && (
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              onMouseDown={cancelProjectRemovalPrompt}
+            >
+              <div className="confirm-card" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="confirm-title">Remove project?</div>
+                <div className="confirm-body">
+                  <div className="confirm-warning">
+                    Warning: Are you sure you want to remove "{projectRemovalPrompt.project.name}"?
+                    This will also remove its roadmaps, chats, and local workspace state.
+                  </div>
+                  {projectRemovalPrompt.error && (
+                    <div className="confirm-error">{projectRemovalPrompt.error}</div>
+                  )}
+                  <div className="confirm-hint">
+                    Yes unlocks after 2 seconds. Use Y to confirm or N/Esc to cancel.
+                  </div>
+                  <div className="confirm-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={cancelProjectRemovalPrompt}
+                      disabled={projectRemovalPrompt.submitting}
+                    >
+                      No, keep it (N)
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => void confirmProjectRemoval()}
+                      disabled={projectRemovalPrompt.submitting || !projectRemovalPrompt.ready}
+                    >
+                      {projectRemovalPrompt.submitting
+                        ? "Removing…"
+                        : projectRemovalPrompt.ready
+                          ? "Yes, remove (Y)"
+                          : "Yes, remove (Y) — wait 2s"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

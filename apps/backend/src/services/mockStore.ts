@@ -160,6 +160,33 @@ export function createProject(payload: Partial<Project>) {
   return project;
 }
 
+export function deleteProject(projectId: string) {
+  const project = store.projects.get(projectId);
+  if (!project) return null;
+
+  const roadmapsToRemove = listRoadmaps(projectId);
+  roadmapsToRemove.forEach((roadmap) => {
+    const chatsForRoadmap = listChats(roadmap.id);
+    chatsForRoadmap.forEach((chat) => {
+      store.messages.delete(chat.id);
+      store.chats.delete(chat.id);
+    });
+
+    const meta = getMetaChat(roadmap.id);
+    if (meta) {
+      store.metaChats.delete(meta.id);
+      store.metaChatMessages.delete(meta.id);
+    }
+
+    store.roadmapLists.delete(roadmap.id);
+  });
+
+  store.snapshots.delete(projectId);
+  store.projects.delete(projectId);
+
+  return project;
+}
+
 export function updateProject(projectId: string, patch: Partial<Project>) {
   const current = store.projects.get(projectId);
   if (!current) return null;

@@ -13,6 +13,7 @@ import * as net from "node:net";
 import * as readline from "node:readline";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolveQwenPath } from "@nexus/shared/qwenPath";
 
 // Protocol message types (matching qwen-code protocol)
 export interface QwenInitMessage {
@@ -103,7 +104,7 @@ export type QwenCommand = QwenUserInput | QwenInterrupt | QwenToolApproval;
 export type QwenMode = "stdio" | "tcp";
 
 export interface QwenClientConfig {
-  qwenPath?: string; // Path to qwen-code CLI script (defaults to ~/Dev/qwen-code/script/qwen-code)
+  qwenPath?: string; // Path to qwen-code CLI script (defaults to repo deps/qwen-code/script/qwen-code)
   mode?: QwenMode; // Communication mode: stdio or tcp (default: stdio)
   tcpPort?: number; // TCP port (defaults to 7777, only used in TCP mode)
   tcpHost?: string; // TCP host (defaults to localhost)
@@ -178,9 +179,8 @@ export class QwenClient {
   }
 
   constructor(config: QwenClientConfig = {}) {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || "";
     this.config = {
-      qwenPath: config.qwenPath ?? `${homeDir}/Dev/qwen-code/script/qwen-code`,
+      qwenPath: resolveQwenPath(config.qwenPath),
       mode: config.mode ?? "stdio",
       tcpPort: config.tcpPort ?? 7777,
       tcpHost: config.tcpHost ?? "127.0.0.1",

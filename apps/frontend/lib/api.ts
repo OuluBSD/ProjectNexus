@@ -125,6 +125,18 @@ export async function updateProject(
   return res.json();
 }
 
+export async function deleteProject(token: string, projectId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to delete project (${res.status})`);
+  }
+}
+
 export async function fetchProjectDetails(
   token: string,
   projectId: string

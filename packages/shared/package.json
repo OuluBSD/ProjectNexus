@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./chat": "./chat/index.ts"
+    "./chat": "./chat/index.ts",
+    "./qwenPath": "./qwenPath.ts"
   },
   "types": "./index.ts",
   "dependencies": {

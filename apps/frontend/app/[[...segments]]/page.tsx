@@ -841,6 +841,18 @@ export default function Page() {
     token: sessionToken ?? "",
     allowChallenge: true,
   });
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+  const selectedRoadmap = useMemo(
+    () => roadmaps.find((r) => r.id === selectedRoadmapId) ?? null,
+    [roadmaps, selectedRoadmapId]
+  );
+  const activePalette = useMemo(
+    () => mergeTheme(baseThemes[resolvedGlobalThemeMode], selectedProject?.theme),
+    [resolvedGlobalThemeMode, selectedProject?.theme]
+  );
   const selectedChat = chats.find((c) => c.id === selectedChatId);
   const isMetaChatSelected = selectedChat?.meta;
   const templateForChat = selectedChat?.templateId
@@ -950,18 +962,6 @@ export default function Page() {
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
   const resolvedGlobalThemeMode: "dark" | "light" =
     globalThemeMode === "auto" ? systemColorScheme : globalThemeMode;
-  const selectedProject = useMemo(
-    () => projects.find((p) => p.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId]
-  );
-  const selectedRoadmap = useMemo(
-    () => roadmaps.find((r) => r.id === selectedRoadmapId) ?? null,
-    [roadmaps, selectedRoadmapId]
-  );
-  const activePalette = useMemo(
-    () => mergeTheme(baseThemes[resolvedGlobalThemeMode], selectedProject?.theme),
-    [resolvedGlobalThemeMode, selectedProject?.theme]
-  );
   useEffect(() => {
     applyThemePalette(activePalette);
   }, [activePalette]);

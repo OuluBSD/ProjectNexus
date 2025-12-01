@@ -20,6 +20,7 @@ import {
 } from "../services/projectRepository";
 import { requireSession } from "../utils/auth";
 import { recordAuditEvent } from "../services/auditLogger";
+import { prepareProjectContent } from "../utils/projectContent";
 
 export const projectRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/projects", async (request, reply) => {
@@ -42,19 +43,42 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
     if (!session) return;
 
     const body = (request.body as Record<string, unknown>) ?? {};
+    const contentSetupInput = {
+      contentPath:
+        typeof body.contentPath === "string" && body.contentPath.trim()
+          ? body.contentPath.trim()
+          : undefined,
+      gitUrl:
+        typeof body.gitUrl === "string" && body.gitUrl.trim() ? body.gitUrl.trim() : undefined,
+    };
+    let preparedContent: Awaited<ReturnType<typeof prepareProjectContent>> = {};
+
+    try {
+      preparedContent = await prepareProjectContent({
+        ...contentSetupInput,
+        logger: fastify.log,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to prepare project content directory";
+      reply.code(400).send({ error: { code: "content_setup_failed", message } });
+      return;
+    }
+
+    const payload = { ...body, ...preparedContent };
     let project;
 
     if (fastify.db) {
       try {
-        project = await dbCreateProject(fastify.db, body);
+        project = await dbCreateProject(fastify.db, payload);
         reply.code(201).send({ id: project.id });
       } catch (err) {
         fastify.log.error({ err }, "Failed to create project in database; using in-memory store.");
-        project = createProject(body);
+        project = createProject(payload);
         reply.code(201).send({ id: project.id });
       }
     } else {
-      project = createProject(body);
+      project = createProject(payload);
       reply.code(201).send({ id: project.id });
     }
 
@@ -66,6 +90,8 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
         name: project.name,
         category: project.category,
         status: project.status,
+        contentPath: project.contentPath,
+        gitUrl: project.gitUrl,
       },
     });
   });
@@ -76,11 +102,36 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
 
     const projectId = (request.params as { projectId: string }).projectId;
     const body = (request.body as Record<string, unknown>) ?? {};
+    const contentSetupInput = {
+      contentPath:
+        typeof body.contentPath === "string" && body.contentPath.trim()
+          ? body.contentPath.trim()
+          : undefined,
+      gitUrl:
+        typeof body.gitUrl === "string" && body.gitUrl.trim() ? body.gitUrl.trim() : undefined,
+    };
+    let preparedContent: Awaited<ReturnType<typeof prepareProjectContent>> = {};
+
+    if (contentSetupInput.contentPath || contentSetupInput.gitUrl) {
+      try {
+        preparedContent = await prepareProjectContent({
+          ...contentSetupInput,
+          logger: fastify.log,
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to prepare project content directory";
+        reply.code(400).send({ error: { code: "content_setup_failed", message } });
+        return;
+      }
+    }
+
+    const payload = { ...body, ...preparedContent };
     let updated;
 
     if (fastify.db) {
       try {
-        updated = await dbUpdateProject(fastify.db, projectId, body);
+        updated = await dbUpdateProject(fastify.db, projectId, payload);
         if (!updated) {
           reply.code(404).send({ error: { code: "not_found", message: "Project not found" } });
           return;
@@ -88,7 +139,7 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
         reply.send(updated);
       } catch (err) {
         fastify.log.error({ err }, "Failed to update project in database; falling back to memory.");
-        updated = updateProject(projectId, body);
+        updated = updateProject(projectId, payload);
         if (!updated) {
           reply.code(404).send({ error: { code: "not_found", message: "Project not found" } });
           return;
@@ -109,7 +160,7 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
       projectId,
       eventType: "project:update",
       metadata: {
-        changes: body,
+        changes: payload,
       },
     });
   });

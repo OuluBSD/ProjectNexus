@@ -43,6 +43,8 @@ function mapProject(row: typeof schema.projects.$inferSelect): Project {
     category: row.category ?? undefined,
     status: row.status ?? "active",
     theme: (row.theme as Record<string, unknown> | null) ?? undefined,
+    contentPath: row.contentPath ?? undefined,
+    gitUrl: row.gitUrl ?? undefined,
   };
 }
 
@@ -152,6 +154,8 @@ export async function dbCreateProject(db: Database, payload: ProjectInput): Prom
       category: payload.category,
       status: payload.status ?? "active",
       theme: payload.theme as Record<string, unknown> | undefined,
+      contentPath: payload.contentPath,
+      gitUrl: payload.gitUrl,
     })
     .returning();
   return mapProject(row);
@@ -170,6 +174,8 @@ export async function dbUpdateProject(
       category: patch.category,
       status: patch.status,
       theme: patch.theme as Record<string, unknown> | undefined,
+      contentPath: patch.contentPath,
+      gitUrl: patch.gitUrl,
       updatedAt: new Date(),
     })
     .where(eq(schema.projects.id, projectId))

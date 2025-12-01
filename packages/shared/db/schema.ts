@@ -21,6 +21,8 @@ export const projects = pgTable("projects", {
   category: varchar("category", { length: 64 }),
   theme: jsonb("theme"), // arbitrary theme overrides
   status: varchar("status", { length: 32 }).default("active"),
+  contentPath: text("content_path"),
+  gitUrl: text("git_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -63,10 +63,10 @@ type Status =
   | "idle"
   | "error";
 type MainTab = "Chat" | "Terminal" | "Code";
-const envAutoUser = process.env.NEXT_PUBLIC_DEMO_USERNAME ?? "";
-const envAutoPass = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "";
-const DEMO_USERNAME = envAutoUser && envAutoUser !== "demo" ? envAutoUser : "user";
-const DEMO_PASSWORD = envAutoPass && envAutoPass !== "demo" ? envAutoPass : "123";
+const envAutoUser = (process.env.NEXT_PUBLIC_DEMO_USERNAME ?? "").trim();
+const envAutoPass = (process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "").trim();
+const DEMO_USERNAME = envAutoUser && envAutoUser.toLowerCase() !== "demo" ? envAutoUser : "user";
+const DEMO_PASSWORD = envAutoPass && envAutoPass.toLowerCase() !== "demo" ? envAutoPass : "123";
 const DEMO_KEYFILE = process.env.NEXT_PUBLIC_DEMO_KEYFILE_TOKEN;
 const PROJECT_STORAGE_KEY = "agentmgr:selectedProject";
 const ROADMAP_STORAGE_KEY = "agentmgr:selectedRoadmap";
@@ -78,7 +78,10 @@ type ProjectItem = {
   category: string;
   status: Status;
   info: string;
+  description?: string;
   theme?: ThemeOverride;
+  contentPath?: string;
+  gitUrl?: string;
 };
 type RoadmapItem = {
   id?: string;
@@ -475,8 +478,11 @@ function mapProjectPayload(project: ProjectPayload): ProjectItem {
     name: project.name,
     category: project.category ?? "Uncategorized",
     status: (project.status as Status) ?? "active",
-    info: project.description ?? "",
+    info: project.description ?? project.contentPath ?? "",
+    description: project.description ?? "",
     theme: normalizeTheme(project.theme ?? undefined),
+    contentPath: project.contentPath ?? undefined,
+    gitUrl: project.gitUrl ?? undefined,
   };
 }
 
@@ -987,6 +993,8 @@ export default function Page() {
     name: "",
     category: "",
     description: "",
+    contentPath: "",
+    gitUrl: "",
   });
   const [roadmapDraft, setRoadmapDraft] = useState({ title: "", tagsInput: "" });
   const [projectFilter, setProjectFilter] = useState("");
@@ -1364,7 +1372,7 @@ export default function Page() {
       setFsDiffLoading(false);
       setFsBaseSha("");
       setFsTargetSha("HEAD");
-      setProjectDraft({ name: "", category: "", description: "" });
+      setProjectDraft({ name: "", category: "", description: "", contentPath: "", gitUrl: "" });
       setRoadmapDraft({ title: "", tagsInput: "" });
       setChatDraft({ title: "", goal: "" });
       setCreatingProject(false);
@@ -1681,11 +1689,12 @@ export default function Page() {
     if (typeof window === "undefined") return;
     const storedToken = localStorage.getItem("sessionToken");
     const storedUsername = localStorage.getItem("username");
-    if (storedToken && storedUsername && storedUsername !== "demo") {
+    const normalizedStored = (storedUsername ?? "").toLowerCase();
+    if (storedToken && storedUsername && normalizedStored !== "demo") {
       handleLoginSuccess(storedToken, storedUsername);
       return;
     }
-    if (storedUsername === "demo") {
+    if (normalizedStored === "demo" || (storedToken && !storedUsername)) {
       localStorage.removeItem("sessionToken");
       localStorage.removeItem("username");
     }
@@ -1892,7 +1901,9 @@ export default function Page() {
     setProjectDraft({
       name: project.name,
       category: project.category ?? "",
-      description: project.info ?? "",
+      description: project.description ?? project.info ?? "",
+      contentPath: project.contentPath ?? "",
+      gitUrl: project.gitUrl ?? "",
     });
     setProjectThemePreset("default");
     setProjectFormOverlay({ mode: "edit", project });
@@ -1903,7 +1914,7 @@ export default function Page() {
 
   const openCreateProjectForm = useCallback(() => {
     setEditingProjectId(null);
-    setProjectDraft({ name: "", category: "", description: "" });
+    setProjectDraft({ name: "", category: "", description: "", contentPath: "", gitUrl: "" });
     setProjectThemePreset("default");
     setProjectFormOverlay({ mode: "create", project: null });
     setContextPanel(null);
@@ -2216,7 +2227,7 @@ export default function Page() {
         setChatTabState({});
         setEditingProjectId(null);
         setEditingRoadmapId(null);
-        setProjectDraft({ name: "", category: "", description: "" });
+        setProjectDraft({ name: "", category: "", description: "", contentPath: "", gitUrl: "" });
         setRoadmapDraft({ title: "", tagsInput: "" });
         setChatDraft({ title: "", goal: "" });
         setCreatingProject(false);
@@ -2387,9 +2398,11 @@ export default function Page() {
         category: projectDraft.category.trim() || undefined,
         description: projectDraft.description.trim() || undefined,
         theme: Object.keys(themeOverride).length ? themeOverride : undefined,
+        contentPath: projectDraft.contentPath.trim() || undefined,
+        gitUrl: projectDraft.gitUrl.trim() || undefined,
       };
       const { id } = await createProject(sessionToken, payload);
-      setProjectDraft({ name: "", category: "", description: "" });
+      setProjectDraft({ name: "", category: "", description: "", contentPath: "", gitUrl: "" });
       setProjectThemePreset("default");
       const projectData = await fetchProjects(sessionToken);
       const mappedProjects = projectData.map(mapProjectPayload);
@@ -2409,7 +2422,7 @@ export default function Page() {
 
   const cancelProjectEdit = useCallback(() => {
     setEditingProjectId(null);
-    setProjectDraft({ name: "", category: "", description: "" });
+    setProjectDraft({ name: "", category: "", description: "", contentPath: "", gitUrl: "" });
     setProjectThemePreset("default");
     setProjectFormOverlay(null);
   }, []);
@@ -2441,6 +2454,8 @@ export default function Page() {
         category: projectDraft.category.trim() || undefined,
         description: projectDraft.description.trim() || undefined,
         theme: Object.keys(themeOverride).length ? themeOverride : undefined,
+        contentPath: projectDraft.contentPath.trim() || undefined,
+        gitUrl: projectDraft.gitUrl.trim() || undefined,
       };
       const updated = await updateProject(sessionToken, editingProjectId, payload);
       const mapped = mapProjectPayload(updated);
@@ -2457,6 +2472,8 @@ export default function Page() {
     editingProjectId,
     projectDraft.category,
     projectDraft.description,
+    projectDraft.contentPath,
+    projectDraft.gitUrl,
     projectDraft.name,
     projectThemePreset,
     sessionToken,
@@ -4574,6 +4591,44 @@ export default function Page() {
                           setProjectDraft((prev) => ({ ...prev, description: e.target.value }))
                         }
                       />
+                    </div>
+                  </div>
+                  <div className="project-form-row">
+                    <div className="project-form-field">
+                      <label className="project-form-label" htmlFor="project-path">
+                        Content path
+                      </label>
+                      <input
+                        id="project-path"
+                        className="filter"
+                        placeholder="Absolute path to project content (e.g., ~/Dev/my-app)"
+                        value={projectDraft.contentPath}
+                        onChange={(e) =>
+                          setProjectDraft((prev) => ({ ...prev, contentPath: e.target.value }))
+                        }
+                      />
+                      <div className="item-subtle">
+                        If this path already has a .git folder, we keep it as-is and read its
+                        origin.
+                      </div>
+                    </div>
+                    <div className="project-form-field">
+                      <label className="project-form-label" htmlFor="project-git-url">
+                        Git server address (optional)
+                      </label>
+                      <input
+                        id="project-git-url"
+                        className="filter"
+                        placeholder="https://github.com/org/repo.git"
+                        value={projectDraft.gitUrl}
+                        onChange={(e) =>
+                          setProjectDraft((prev) => ({ ...prev, gitUrl: e.target.value }))
+                        }
+                      />
+                      <div className="item-subtle">
+                        When both path and URL are set, we clone the repo into the path (or a
+                        subfolder if the path already exists).
+                      </div>
                     </div>
                   </div>
                   <div className="project-form-row">

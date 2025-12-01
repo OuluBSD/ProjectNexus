@@ -71,6 +71,8 @@ export function createProject(payload: Partial<Project>) {
     status: payload.status ?? "active",
     theme: payload.theme,
     description: payload.description,
+    contentPath: payload.contentPath,
+    gitUrl: payload.gitUrl,
   };
   store.projects.set(project.id, project);
   return project;

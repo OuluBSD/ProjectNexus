@@ -118,6 +118,8 @@ export class GitStorage {
       status: project.status,
       theme: project.theme,
       description: project.description,
+      contentPath: project.contentPath,
+      gitUrl: project.gitUrl,
       updatedAt: new Date().toISOString(),
     };
 

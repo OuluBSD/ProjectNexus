@@ -5,6 +5,8 @@ export type Project = {
   status: string;
   theme?: Record<string, unknown>;
   description?: string;
+  contentPath?: string;
+  gitUrl?: string;
 };
 
 export type RoadmapList = {

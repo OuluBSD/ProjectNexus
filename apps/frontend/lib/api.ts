@@ -1,4 +1,10 @@
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_HTTP_BASE ?? "http://localhost:3001";
+const apiBaseEnv = process.env.NEXT_PUBLIC_BACKEND_HTTP_BASE;
+const API_BASE =
+  apiBaseEnv && apiBaseEnv.trim().length
+    ? apiBaseEnv
+    : typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:3001";
 
 export type ProjectPayload = {
   id: string;
@@ -7,6 +13,8 @@ export type ProjectPayload = {
   status: string;
   description?: string;
   theme?: Record<string, unknown> | null;
+  contentPath?: string | null;
+  gitUrl?: string | null;
 };
 
 export type RoadmapSummary = {
@@ -28,6 +36,8 @@ export type ProjectUpdatePayload = {
   description?: string;
   status?: string;
   theme?: Record<string, unknown> | null;
+  contentPath?: string | null;
+  gitUrl?: string | null;
 };
 
 export type RoadmapUpdatePayload = {
@@ -90,6 +100,8 @@ export async function createProject(
     status?: string;
     description?: string;
     theme?: Record<string, unknown> | null;
+    contentPath?: string;
+    gitUrl?: string;
   }
 ): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE}/api/projects`, {

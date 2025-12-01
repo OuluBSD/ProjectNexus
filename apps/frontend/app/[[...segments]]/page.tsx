@@ -849,6 +849,11 @@ export default function Page() {
     () => roadmaps.find((r) => r.id === selectedRoadmapId) ?? null,
     [roadmaps, selectedRoadmapId]
   );
+  const systemColorScheme = usePrefersColorScheme();
+  const resolvedGlobalThemeMode: "dark" | "light" = useMemo(
+    () => (globalThemeMode === "auto" ? systemColorScheme : globalThemeMode),
+    [globalThemeMode, systemColorScheme]
+  );
   const activePalette = useMemo(
     () => mergeTheme(baseThemes[resolvedGlobalThemeMode], selectedProject?.theme),
     [resolvedGlobalThemeMode, selectedProject?.theme]
@@ -952,7 +957,6 @@ export default function Page() {
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
   const chatStreamRef = useRef<HTMLDivElement>(null);
-  const systemColorScheme = usePrefersColorScheme();
   const [accountMenu, setAccountMenu] = useState<{ x: number; y: number } | null>(null);
   const [overlay, setOverlay] = useState<{ kind: "settings" | "activity" } | null>(null);
   const [projectFormOverlay, setProjectFormOverlay] = useState<{
@@ -960,10 +964,6 @@ export default function Page() {
     project?: ProjectItem | null;
   } | null>(null);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
-  const resolvedGlobalThemeMode: "dark" | "light" = useMemo(
-    () => (globalThemeMode === "auto" ? systemColorScheme : globalThemeMode),
-    [globalThemeMode, systemColorScheme]
-  );
   useEffect(() => {
     applyThemePalette(activePalette);
   }, [activePalette]);

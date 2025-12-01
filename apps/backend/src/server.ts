@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { migrateUserConfig } from "./utils/configMigration.js";
+import { getConfigDefault } from "./utils/configMigration.js";
+import { initMockStorePersistence } from "./services/mockStorePersistence.js";
 
 // Load .env from repository root or ~/.config/agent-manager/config.env
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +48,15 @@ async function start() {
   await app.register(dbPlugin);
   await app.register(gitStoragePlugin);
   await app.register(qwenPlugin);
+
+  // Enable disk-backed mock store when no database is available
+  if (!app.db) {
+    const repoDir =
+      process.env.AGENT_MANAGER_REPO_DIR ||
+      getConfigDefault("AGENT_MANAGER_REPO_DIR") ||
+      path.resolve(__dirname, "../../../");
+    await initMockStorePersistence({ dataDir: path.resolve(repoDir), log: app.log });
+  }
 
   app.get("/health", async () => ({ status: "ok" }));
   await app.register(registerRoutes, { prefix: "/api" });

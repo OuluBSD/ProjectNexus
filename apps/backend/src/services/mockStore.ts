@@ -39,6 +39,16 @@ export const store: Store = {
   terminalSessions: new Map(),
 };
 
+let persistHandler: (() => void) | null = null;
+
+export function attachPersistence(handler: () => void) {
+  persistHandler = handler;
+}
+
+function triggerPersist() {
+  persistHandler?.();
+}
+
 function deriveStatus(statuses: string[]) {
   if (statuses.length === 0) return "idle";
   if (statuses.every((status) => status === "done")) return "done";
@@ -75,6 +85,7 @@ export function createProject(payload: Partial<Project>) {
     gitUrl: payload.gitUrl,
   };
   store.projects.set(project.id, project);
+  triggerPersist();
   return project;
 }
 
@@ -102,6 +113,7 @@ export function deleteProject(projectId: string) {
   store.snapshots.delete(projectId);
   store.projects.delete(projectId);
 
+  triggerPersist();
   return project;
 }
 
@@ -110,6 +122,7 @@ export function updateProject(projectId: string, patch: Partial<Project>) {
   if (!current) return null;
   const next = { ...current, ...patch };
   store.projects.set(projectId, next);
+  triggerPersist();
   return next;
 }
 
@@ -136,6 +149,7 @@ export function createRoadmap(projectId: string, payload: Partial<RoadmapList>) 
   };
   store.metaChats.set(meta.id, meta);
   store.roadmapLists.set(roadmap.id, { ...roadmap, metaChatId: meta.id });
+  triggerPersist();
   return { roadmap, meta };
 }
 
@@ -144,6 +158,7 @@ export function updateRoadmap(roadmapId: string, patch: Partial<RoadmapList>) {
   if (!current) return null;
   const next = { ...current, ...patch };
   store.roadmapLists.set(roadmapId, next);
+  triggerPersist();
   return next;
 }
 
@@ -208,6 +223,7 @@ export function syncRoadmapMeta(roadmapId: string) {
   if (roadmap) {
     store.roadmapLists.set(roadmapId, { ...roadmap, progress, status });
   }
+  triggerPersist();
 
   // Emit event for real-time WebSocket notifications
   eventBus.emitMetaChatUpdated(roadmapId, {
@@ -240,7 +256,9 @@ export function syncMetaFromChats(roadmapId: string) {
       status,
       summary: `Aggregated from ${chats.length} chats`,
     });
-    return { ...meta, progress, status, summary: `Aggregated from ${chats.length} chats` };
+    const updated = { ...meta, progress, status, summary: `Aggregated from ${chats.length} chats` };
+    triggerPersist();
+    return updated;
   }
   return null;
 }
@@ -258,6 +276,7 @@ export function createChat(roadmapListId: string, payload: Partial<Chat>) {
   };
   store.chats.set(chat.id, chat);
   store.messages.set(chat.id, []);
+  triggerPersist();
   return chat;
 }
 
@@ -266,6 +285,7 @@ export function updateChat(chatId: string, patch: Partial<Chat>) {
   if (!current) return null;
   const next = { ...current, ...patch };
   store.chats.set(chatId, next);
+  triggerPersist();
   return next;
 }
 
@@ -287,6 +307,7 @@ export function mergeChats(sourceChatId: string, targetChatId: string) {
   store.messages.set(targetChatId, mergedMessages);
   store.messages.delete(sourceChatId);
   store.chats.delete(sourceChatId);
+  triggerPersist();
   return { target: { ...target }, removedChatId: sourceChatId };
 }
 
@@ -298,6 +319,7 @@ export function addMessage(chatId: string, message: Omit<Message, "id" | "create
     createdAt: new Date().toISOString(),
   };
   store.messages.set(chatId, [...messages, nextMessage]);
+  triggerPersist();
   return nextMessage;
 }
 
@@ -316,6 +338,7 @@ export function addMetaChatMessage(
     createdAt: new Date().toISOString(),
   };
   store.metaChatMessages.set(metaChatId, [...messages, nextMessage]);
+  triggerPersist();
   return nextMessage;
 }
 
@@ -344,6 +367,7 @@ export function createTemplate(payload: Partial<Template>) {
     metadata: payload.metadata,
   };
   store.templates.set(template.id, template);
+  triggerPersist();
   return template;
 }
 
@@ -352,6 +376,7 @@ export function updateTemplate(templateId: string, patch: Partial<Template>) {
   if (!current) return null;
   const next = { ...current, ...patch };
   store.templates.set(templateId, next);
+  triggerPersist();
   return next;
 }
 
@@ -386,6 +411,7 @@ export function restoreProject(payload: Partial<Project> & { id: string }) {
       theme: payload.theme,
     };
     store.projects.set(project.id, project);
+    triggerPersist();
     return project;
   }
 }
@@ -400,6 +426,7 @@ export function addSnapshot(projectId: string, gitSha: string, message?: string)
   };
   const list = store.snapshots.get(projectId) ?? [];
   store.snapshots.set(projectId, [...list, snapshot]);
+  triggerPersist();
   return snapshot;
 }
 

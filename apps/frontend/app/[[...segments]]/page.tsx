@@ -359,6 +359,31 @@ const demoSeeds: {
           aiChat: autoDemoWorkspace.aiChat,
         },
       },
+      {
+        title: "AI Demo",
+        goal: "Run the qwen-backed auto demo inside the main chat view.",
+        status: "active" as Status,
+        progress: 0.18,
+        metadata: {
+          focus: "Kick off the auto-demo calc script via qwen",
+          workspacePath: autoDemoWorkspace.path,
+          gitRepo: autoDemoWorkspace.repo,
+          manager: autoDemoWorkspace.manager,
+          server: autoDemoWorkspace.server,
+          aiChat: autoDemoWorkspace.aiChat,
+        },
+        starterMessages: [
+          {
+            role: "assistant",
+            content: `✦ Auto demo ready: run qwen to write and execute a tiny script.\n\n\`\`\`bash\n# Shell\ncd ${autoDemoWorkspace.path}\nls -la\n\`\`\`\n\nAttached: manager, server, ai-chat and git repo.`,
+          },
+          {
+            role: "assistant",
+            content:
+              "✦ Press “Run AI demo (qwen)” above to let the agent create a Python script that prints 123×456 and execute it safely in the attached repo.",
+          },
+        ],
+      },
     ],
   },
   {

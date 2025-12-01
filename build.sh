@@ -5,6 +5,12 @@
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
+# Ensure dependencies are installed. We expect pnpm's root node_modules and its internal .pnpm store.
+if [ ! -d "node_modules" ] || [ ! -d "node_modules/.pnpm" ]; then
+  echo "node_modules missing or incomplete; running pnpm install..."
+  pnpm install
+fi
+
 echo "Starting linting checks..."
 
 # Run prettier check on all files

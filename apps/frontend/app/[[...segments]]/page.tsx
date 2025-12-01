@@ -840,6 +840,10 @@ export default function Page() {
     () => projects.find((p) => p.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
+  const selectedRoadmap = useMemo(
+    () => roadmaps.find((r) => r.id === selectedRoadmapId) ?? null,
+    [roadmaps, selectedRoadmapId]
+  );
   const activePalette = useMemo(
     () => mergeTheme(baseThemes[resolvedGlobalThemeMode], selectedProject?.theme),
     [resolvedGlobalThemeMode, selectedProject?.theme]
@@ -1007,6 +1011,14 @@ export default function Page() {
   const [updatingProject, setUpdatingProject] = useState(false);
   const [editingRoadmapId, setEditingRoadmapId] = useState<string | null>(null);
   const [updatingRoadmap, setUpdatingRoadmap] = useState(false);
+  const [roadmapFormOverlay, setRoadmapFormOverlay] = useState<{
+    mode: "create" | "edit";
+    roadmap?: RoadmapItem | null;
+  } | null>(null);
+  const [chatFormOverlay, setChatFormOverlay] = useState<{
+    mode: "create";
+    roadmapId?: string | null;
+  } | null>(null);
   const [contextPanel, setContextPanel] = useState<ContextPanel | null>(null);
   const normalizedProjectFilter = projectFilter.trim();
   const filteredProjectQuery = normalizedProjectFilter.toLowerCase();
@@ -1711,6 +1723,7 @@ export default function Page() {
   const cancelRoadmapEdit = useCallback(() => {
     setEditingRoadmapId(null);
     setRoadmapDraft({ title: "", tagsInput: "" });
+    setRoadmapFormOverlay(null);
   }, []);
 
   const handleSelectRoadmap = useCallback(
@@ -1922,11 +1935,40 @@ export default function Page() {
     setStatusMessage("Ready to add a project.");
   }, []);
 
-  const startRoadmapEdit = useCallback((roadmap: RoadmapItem) => {
-    setEditingRoadmapId(roadmap.id ?? null);
-    setRoadmapDraft({ title: roadmap.title, tagsInput: roadmap.tags.join(", ") });
-    setStatusMessage(`Editing roadmap ${roadmap.title}.`);
-  }, []);
+  const startRoadmapEdit = useCallback(
+    (roadmap: RoadmapItem) => {
+      setEditingRoadmapId(roadmap.id ?? null);
+      setRoadmapDraft({ title: roadmap.title, tagsInput: roadmap.tags.join(", ") });
+      setRoadmapFormOverlay({ mode: "edit", roadmap });
+      setStatusMessage(`Editing roadmap ${roadmap.title}.`);
+    },
+    [setRoadmapFormOverlay]
+  );
+
+  const openCreateRoadmapForm = useCallback(() => {
+    if (!selectedProjectId) {
+      setStatusMessage("Select a project before adding a roadmap.");
+      return;
+    }
+    setEditingRoadmapId(null);
+    setRoadmapDraft({ title: "", tagsInput: "" });
+    setRoadmapFormOverlay({ mode: "create", roadmap: null });
+    setStatusMessage("Ready to add a roadmap.");
+  }, [selectedProjectId]);
+
+  const openCreateChatForm = useCallback(
+    (roadmapIdHint?: string | null) => {
+      const targetRoadmapId = roadmapIdHint ?? selectedRoadmapId;
+      if (!targetRoadmapId) {
+        setStatusMessage("Select a roadmap before adding a chat.");
+        return;
+      }
+      setChatDraft({ title: "", goal: "" });
+      setChatFormOverlay({ mode: "create", roadmapId: targetRoadmapId });
+      setStatusMessage("Ready to add a chat.");
+    },
+    [selectedRoadmapId]
+  );
 
   const startProjectRemovalPrompt = useCallback((project: ProjectItem) => {
     setProjectRemovalPrompt({ project, ready: false, submitting: false, error: null });
@@ -1988,7 +2030,7 @@ export default function Page() {
             if (roadmap.id) {
               await handleSelectRoadmap(roadmap.id);
               handleTabChange("Chat");
-              setChatDraft({ title: "", goal: "" });
+              openCreateChatForm(roadmap.id);
               void openRoadmapContextPanel(roadmap, `Chat flow ready for ${roadmap.title}.`);
               nextMessage = `Ready to add a chat on ${roadmap.title}.`;
             } else {
@@ -2164,16 +2206,15 @@ export default function Page() {
       selectedChatId,
       selectedProjectId,
       sessionToken,
-      setChatDraft,
       setChats,
       setContextMenu,
-      setMessages,
       setMessagesError,
       setSelectedChatId,
       setStatusMessage,
       startProjectEdit,
       startProjectRemovalPrompt,
       startRoadmapEdit,
+      openCreateChatForm,
       openRoadmapContextPanel,
       syncUrlSelection,
     ]
@@ -2432,6 +2473,17 @@ export default function Page() {
     cancelProjectEdit();
   }, [cancelProjectEdit, creatingProject, updatingProject]);
 
+  const handleCloseRoadmapForm = useCallback(() => {
+    if (creatingRoadmap || updatingRoadmap) return;
+    cancelRoadmapEdit();
+  }, [cancelRoadmapEdit, creatingRoadmap, updatingRoadmap]);
+
+  const handleCloseChatForm = useCallback(() => {
+    if (creatingChat) return;
+    setChatFormOverlay(null);
+    setChatDraft({ title: "", goal: "" });
+  }, [creatingChat]);
+
   const handleUpdateProject = useCallback(async () => {
     if (!sessionToken) {
       setStatusMessage("Login to update projects.");
@@ -2542,6 +2594,7 @@ export default function Page() {
         progress: 0,
       });
       setRoadmapDraft({ title: "", tagsInput: "" });
+      setRoadmapFormOverlay(null);
       await loadRoadmapsForProject(selectedProjectId, sessionToken);
       setSelectedRoadmapId(id);
       if (typeof window !== "undefined") localStorage.setItem(ROADMAP_STORAGE_KEY, id);
@@ -2580,6 +2633,7 @@ export default function Page() {
         progress: 0,
       });
       setChatDraft({ title: "", goal: "" });
+      setChatFormOverlay(null);
       persistChatSelection(selectedRoadmapId, id);
       await loadChatsForRoadmap(
         selectedRoadmapId,
@@ -3898,9 +3952,6 @@ export default function Page() {
     }
   })();
 
-  const editingRoadmapName =
-    editingRoadmapId &&
-    (roadmaps.find((roadmap) => roadmap.id === editingRoadmapId)?.title ?? editingRoadmapId);
   const contextPanelTitle = contextPanel
     ? contextPanel.kind === "project-templates"
       ? "Templates"
@@ -4052,54 +4103,19 @@ export default function Page() {
                   Clear
                 </button>
               </div>
-              <div className="login-row" style={{ gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                <input
-                  className="filter"
-                  placeholder="Roadmap title"
-                  value={roadmapDraft.title}
-                  onChange={(e) => setRoadmapDraft((prev) => ({ ...prev, title: e.target.value }))}
-                  style={{ minWidth: 160 }}
-                  disabled={!selectedProjectId}
-                />
-                <input
-                  className="filter"
-                  placeholder="Tags (comma separated)"
-                  value={roadmapDraft.tagsInput}
-                  onChange={(e) =>
-                    setRoadmapDraft((prev) => ({ ...prev, tagsInput: e.target.value }))
-                  }
-                  style={{ flex: 1, minWidth: 180 }}
-                  disabled={!selectedProjectId}
-                />
+              <div
+                className="login-row"
+                style={{ gap: 6, marginBottom: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
+              >
                 <button
                   className="tab"
-                  onClick={editingRoadmapId ? handleUpdateRoadmap : handleCreateRoadmap}
-                  disabled={
-                    editingRoadmapId
-                      ? updatingRoadmap || !sessionToken || !selectedProjectId
-                      : creatingRoadmap || !sessionToken || !selectedProjectId
-                  }
-                  title={selectedProjectId ? "" : "Select a project first"}
+                  onClick={openCreateRoadmapForm}
+                  disabled={!sessionToken || !selectedProjectId}
+                  title={selectedProjectId ? "Add a roadmap" : "Select a project first"}
                 >
-                  {editingRoadmapId
-                    ? updatingRoadmap
-                      ? "Saving…"
-                      : "Save changes"
-                    : creatingRoadmap
-                      ? "Creating…"
-                      : "+ Roadmap"}
+                  Add
                 </button>
-                {editingRoadmapId && (
-                  <button className="ghost" onClick={cancelRoadmapEdit} disabled={updatingRoadmap}>
-                    Cancel edit
-                  </button>
-                )}
               </div>
-              {editingRoadmapName && (
-                <div className="item-subtle editing-hint">
-                  Editing roadmap: {editingRoadmapName}
-                </div>
-              )}
               <div className="list">
                 {selectedProjectId && filteredRoadmaps.length === 0 && (
                   <div className="item-subtle">
@@ -4167,30 +4183,17 @@ export default function Page() {
               <header className="column-header">
                 <span>Chats</span>
               </header>
-              <div className="login-row" style={{ gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                <input
-                  className="filter"
-                  placeholder="Chat title"
-                  value={chatDraft.title}
-                  onChange={(e) => setChatDraft((prev) => ({ ...prev, title: e.target.value }))}
-                  style={{ minWidth: 160 }}
-                  disabled={!selectedRoadmapId}
-                />
-                <input
-                  className="filter"
-                  placeholder="Goal"
-                  value={chatDraft.goal}
-                  onChange={(e) => setChatDraft((prev) => ({ ...prev, goal: e.target.value }))}
-                  style={{ flex: 1, minWidth: 200 }}
-                  disabled={!selectedRoadmapId}
-                />
+              <div
+                className="login-row"
+                style={{ gap: 6, marginBottom: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
+              >
                 <button
                   className="tab"
-                  onClick={handleCreateChat}
-                  disabled={creatingChat || !sessionToken || !selectedRoadmapId}
-                  title={selectedRoadmapId ? "" : "Select a roadmap first"}
+                  onClick={() => openCreateChatForm()}
+                  disabled={!sessionToken || !selectedRoadmapId}
+                  title={selectedRoadmapId ? "Add a chat" : "Select a roadmap first"}
                 >
-                  {creatingChat ? "Creating…" : "+ Chat"}
+                  Add
                 </button>
               </div>
               <div className="list">
@@ -4517,6 +4520,203 @@ export default function Page() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {roadmapFormOverlay && (
+            <div
+              className="settings-overlay"
+              role="dialog"
+              aria-modal="true"
+              onMouseDown={handleCloseRoadmapForm}
+            >
+              <div
+                className="settings-window project-form-window"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="settings-header">
+                  <div>
+                    <div className="settings-title">
+                      {roadmapFormOverlay.mode === "edit" ? "Edit roadmap" : "Add roadmap"}
+                    </div>
+                    <div className="item-subtle">
+                      {roadmapFormOverlay.mode === "edit"
+                        ? (roadmapFormOverlay.roadmap?.title ?? "Update roadmap details.")
+                        : selectedProject
+                          ? `Project: ${selectedProject.name}`
+                          : "Select a project before creating a roadmap."}
+                    </div>
+                  </div>
+                  <button className="ghost" onClick={handleCloseRoadmapForm}>
+                    Close
+                  </button>
+                </div>
+                <div className="project-form-body">
+                  <div className="project-form-row">
+                    <div className="project-form-field">
+                      <label className="project-form-label" htmlFor="roadmap-title">
+                        Title
+                      </label>
+                      <input
+                        id="roadmap-title"
+                        className="filter"
+                        placeholder="Roadmap title"
+                        value={roadmapDraft.title}
+                        onChange={(e) =>
+                          setRoadmapDraft((prev) => ({ ...prev, title: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="project-form-row">
+                    <div className="project-form-field">
+                      <label className="project-form-label" htmlFor="roadmap-tags">
+                        Tags
+                      </label>
+                      <input
+                        id="roadmap-tags"
+                        className="filter"
+                        placeholder="Comma separated (e.g., auth, api, cleanup)"
+                        value={roadmapDraft.tagsInput}
+                        onChange={(e) =>
+                          setRoadmapDraft((prev) => ({ ...prev, tagsInput: e.target.value }))
+                        }
+                      />
+                      <div className="item-subtle">We split by comma and trim whitespace.</div>
+                    </div>
+                  </div>
+                  <div className="project-form-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={handleCloseRoadmapForm}
+                      disabled={creatingRoadmap || updatingRoadmap}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="tab"
+                      onClick={
+                        roadmapFormOverlay.mode === "edit"
+                          ? handleUpdateRoadmap
+                          : handleCreateRoadmap
+                      }
+                      disabled={
+                        !sessionToken ||
+                        !selectedProjectId ||
+                        (roadmapFormOverlay.mode === "edit" ? updatingRoadmap : creatingRoadmap)
+                      }
+                      title={
+                        sessionToken
+                          ? selectedProjectId
+                            ? ""
+                            : "Select a project first"
+                          : "Login required"
+                      }
+                    >
+                      {roadmapFormOverlay.mode === "edit"
+                        ? updatingRoadmap
+                          ? "Saving…"
+                          : "Save changes"
+                        : creatingRoadmap
+                          ? "Creating…"
+                          : "Create roadmap"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {chatFormOverlay && (
+            <div
+              className="settings-overlay"
+              role="dialog"
+              aria-modal="true"
+              onMouseDown={handleCloseChatForm}
+            >
+              <div
+                className="settings-window project-form-window"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="settings-header">
+                  <div>
+                    <div className="settings-title">Add chat</div>
+                    <div className="item-subtle">
+                      {(() => {
+                        const targetRoadmapId = chatFormOverlay.roadmapId ?? selectedRoadmapId;
+                        const roadmapTitle =
+                          roadmaps.find((r) => r.id === targetRoadmapId)?.title ??
+                          selectedRoadmap?.title;
+                        return roadmapTitle
+                          ? `Roadmap: ${roadmapTitle}`
+                          : "Select a roadmap before creating a chat.";
+                      })()}
+                    </div>
+                  </div>
+                  <button className="ghost" onClick={handleCloseChatForm}>
+                    Close
+                  </button>
+                </div>
+                <div className="project-form-body">
+                  <div className="project-form-row">
+                    <div className="project-form-field">
+                      <label className="project-form-label" htmlFor="chat-title">
+                        Title
+                      </label>
+                      <input
+                        id="chat-title"
+                        className="filter"
+                        placeholder="Chat title"
+                        value={chatDraft.title}
+                        onChange={(e) =>
+                          setChatDraft((prev) => ({ ...prev, title: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="project-form-row">
+                    <div className="project-form-field">
+                      <label className="project-form-label" htmlFor="chat-goal">
+                        Goal / focus
+                      </label>
+                      <input
+                        id="chat-goal"
+                        className="filter"
+                        placeholder="What do we want to achieve?"
+                        value={chatDraft.goal}
+                        onChange={(e) =>
+                          setChatDraft((prev) => ({ ...prev, goal: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="project-form-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={handleCloseChatForm}
+                      disabled={creatingChat}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="tab"
+                      onClick={handleCreateChat}
+                      disabled={!sessionToken || !selectedRoadmapId || creatingChat}
+                      title={
+                        sessionToken
+                          ? selectedRoadmapId
+                            ? ""
+                            : "Select a roadmap first"
+                          : "Login required"
+                      }
+                    >
+                      {creatingChat ? "Creating…" : "Create chat"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -4412,9 +4412,10 @@ export default function Page() {
                 {sendingMessage ? "Sending…" : "Send"}
               </button>
             </div>
-            </>
-          </div>
-        );
+          </>
+        )}
+      </div>
+    );
     }
   })();
 

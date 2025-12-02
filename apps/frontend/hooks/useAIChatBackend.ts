@@ -9,9 +9,11 @@ import { resolveBackendBase, toWebSocketBase } from "../lib/backendBase";
 
 export interface ChatMessage {
   id: number;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   timestamp: number;
+  metadata?: Record<string, unknown>;
+  displayRole?: string;
 }
 
 export type ChatStatus = "idle" | "connecting" | "responding" | "error";
@@ -26,6 +28,63 @@ interface UseAIChatBackendOptions {
   workspacePath?: string | null;
   onAssistantMessage?: (payload: { content: string; final: boolean }) => void;
   onStatusChange?: (payload: { status: ChatStatus; message?: string }) => void;
+  onInfo?: (payload: { message?: string; raw?: any }) => void;
+  onToolMessage?: (payload: {
+    content: string;
+    displayRole?: string;
+    final: boolean;
+    messageId?: number;
+  }) => void;
+}
+
+function formatToolCall(tool: any): { label: string; content: string } {
+  const rawLabel = (typeof tool?.tool_name === "string" && tool.tool_name.trim()) || "tool";
+  const label =
+    rawLabel.toLowerCase().includes("shell") || rawLabel.toLowerCase().includes("bash")
+      ? "Shell"
+      : rawLabel;
+  const args = (tool && typeof tool === "object" && tool.args) || {};
+  const primaryArg =
+    typeof args.command === "string"
+      ? args.command
+      : typeof args.cmd === "string"
+        ? args.cmd
+        : typeof args.input === "string"
+          ? args.input
+          : null;
+  const argPreview =
+    primaryArg ||
+    (args && typeof args === "object" && Object.keys(args).length
+      ? JSON.stringify(args, null, 2)
+      : "");
+  const statusText = tool?.status ? ` [${tool.status}]` : "";
+  const approvalText =
+    tool?.confirmation_details?.requires_approval || tool?.requires_approval
+      ? " (awaiting approval)"
+      : "";
+  const header = `${label}${statusText}${approvalText}`;
+  const content = argPreview ? `${header}\n${argPreview}` : header;
+  return { label, content };
+}
+
+function stripStatus(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*$/, "").trim() || label;
+}
+
+function markToolContentAsDone(content: string): string {
+  const lines = content.split("\n");
+  if (lines.length === 0) return content;
+  const header = lines[0];
+  const rest = lines.slice(1).join("\n");
+  let updatedHeader: string;
+  if (/\[pending]/i.test(header) || /\[waiting/i.test(header)) {
+    updatedHeader = header.replace(/\[(pending|waiting[^)]*)]/i, "[done]");
+  } else if (!/\[done]/i.test(header)) {
+    updatedHeader = `${header} [done]`;
+  } else {
+    updatedHeader = header;
+  }
+  return rest ? `${updatedHeader}\n${rest}` : updatedHeader;
 }
 
 export function useAIChatBackend(options: UseAIChatBackendOptions) {
@@ -40,6 +99,10 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
   const connectionId = useRef(Math.random().toString(36));
   const streamingContentRef = useRef("");
   const optionsRef = useRef(options);
+  const pendingMessagesRef = useRef<string[]>([]);
+  const lastToolMessageId = useRef<number | null>(null);
+  const toolPendingRef = useRef(false);
+  const lastToolSnapshotRef = useRef<{ content: string; displayRole?: string } | null>(null);
 
   useEffect(() => {
     optionsRef.current = options;
@@ -95,13 +158,29 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     console.log("[useAIChatBackend] Creating WebSocket:", wsUrl);
     const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      console.log("[useAIChatBackend] WebSocket opened");
-      setStatus("idle");
-      setStatusMessage("Connected");
-      setIsConnected(true);
-      wsRef.current = ws;
-    };
+      ws.onopen = () => {
+        console.log("[useAIChatBackend] WebSocket opened");
+        setStatus("idle");
+        setStatusMessage("Connected");
+        setIsConnected(true);
+        wsRef.current = ws;
+        // Flush any queued user messages
+        if (pendingMessagesRef.current.length) {
+          pendingMessagesRef.current.forEach((queued) => {
+            try {
+              ws.send(
+                JSON.stringify({
+                  type: "user_input",
+                  content: queued,
+                })
+              );
+            } catch (err) {
+              console.error("Failed to send queued message:", err);
+            }
+          });
+          pendingMessagesRef.current = [];
+        }
+      };
 
     ws.onmessage = (event) => {
       try {
@@ -128,15 +207,17 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
       optionsRef.current.onStatusChange?.({ status: "error", message: "Connection error" });
     };
 
-    ws.onclose = () => {
-      setStatus("idle");
-      setStatusMessage("Disconnected");
-      setIsConnected(false);
-      setIsStreaming(false);
-      setStreamingContent("");
-      streamingContentRef.current = "";
-      wsRef.current = null;
-    };
+      ws.onclose = () => {
+        setStatus("idle");
+        setStatusMessage("Disconnected");
+        setIsConnected(false);
+        setIsStreaming(false);
+        setStreamingContent("");
+        streamingContentRef.current = "";
+        wsRef.current = null;
+        toolPendingRef.current = false;
+        lastToolMessageId.current = null;
+      };
   }, [
     options.backend,
     options.sessionId,
@@ -169,14 +250,14 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     setStatus("idle");
     setStatusMessage("");
     setIsConnected(false);
+    toolPendingRef.current = false;
+    lastToolMessageId.current = null;
+    pendingMessagesRef.current = [];
   }, []);
 
   // Send message to backend
   const sendMessage = useCallback((content: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.error("WebSocket not connected");
-      return;
-    }
+    const ready = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
 
     const userMessage: ChatMessage = {
       id: nextMessageId.current++,
@@ -191,13 +272,43 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     setStreamingContent("");
     streamingContentRef.current = "";
 
-    wsRef.current.send(
-      JSON.stringify({
-        type: "user_input",
-        content,
-      })
-    );
-  }, []);
+    if (ready && wsRef.current) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "user_input",
+          content,
+        })
+      );
+    } else {
+      // Queue until connection opens
+      pendingMessagesRef.current.push(content);
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connect();
+      }
+    }
+  }, [connect]);
+
+  // Send a message without adding it to the visible chat log (used for session hydration)
+  const sendBackgroundMessage = useCallback(
+    (content: string) => {
+      const ready = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
+
+      if (ready && wsRef.current) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "user_input",
+            content,
+          })
+        );
+      } else {
+        pendingMessagesRef.current.push(content);
+        if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+          connect();
+        }
+      }
+    },
+    [connect]
+  );
 
   // Interrupt ongoing response
   const interrupt = useCallback(() => {
@@ -321,6 +432,39 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
           const nextStatus = stateMap[msg.state] || "idle";
           setStatus(nextStatus);
           optionsRef.current.onStatusChange?.({ status: nextStatus, message: msg.message });
+          if (nextStatus === "idle" && toolPendingRef.current) {
+            // Tool run likely finished
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === lastToolMessageId.current
+                  ? {
+                      ...m,
+                      content: markToolContentAsDone(m.content),
+                      displayRole: m.displayRole
+                        ? `${stripStatus(m.displayRole)} (done)`
+                        : "Tool (done)",
+                    }
+                  : m
+              )
+            );
+            if (lastToolMessageId.current !== null) {
+              const updated = lastToolSnapshotRef.current;
+              const doneContent = updated ? markToolContentAsDone(updated.content) : "";
+              const doneLabel = updated?.displayRole
+                ? `${stripStatus(updated.displayRole)} (done)`
+                : "Tool (done)";
+              lastToolSnapshotRef.current = { content: doneContent, displayRole: doneLabel };
+              optionsRef.current.onToolMessage?.({
+                content: doneContent,
+                displayRole: doneLabel,
+                final: true,
+                messageId: lastToolMessageId.current,
+              });
+            }
+            toolPendingRef.current = false;
+            lastToolMessageId.current = null;
+            lastToolSnapshotRef.current = null;
+          }
         }
         if (msg.message) {
           setStatusMessage(msg.message);
@@ -336,6 +480,29 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
       case "tool_group":
         // Tool execution notification
         setStatusMessage(`Executing ${msg.tools?.length || 0} tool(s)...`);
+        if (Array.isArray((msg as any).tools) && (msg as any).tools.length > 0) {
+          const toolDetails = (msg as any).tools.map((tool: any) => formatToolCall(tool));
+          const content = toolDetails.map((tool) => tool.content).join("\n\n");
+          const displayRole =
+            toolDetails.length === 1 ? toolDetails[0].label : `${toolDetails.length} tools`;
+          const toolMessage: ChatMessage = {
+            id: nextMessageId.current++,
+            role: "tool",
+            content,
+            timestamp: Date.now(),
+            displayRole,
+          };
+          setMessages((prev) => [...prev, toolMessage]);
+          lastToolMessageId.current = toolMessage.id;
+          toolPendingRef.current = true;
+          lastToolSnapshotRef.current = { content, displayRole };
+          optionsRef.current.onToolMessage?.({
+            content,
+            displayRole,
+            final: false,
+            messageId: toolMessage.id,
+          });
+        }
         break;
 
       case "completion_stats":
@@ -343,11 +510,45 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
         setIsStreaming(false);
         setStatus("idle");
         setStatusMessage("Ready");
+        if (toolPendingRef.current) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lastToolMessageId.current
+                ? {
+                    ...m,
+                    content: markToolContentAsDone(m.content),
+                    displayRole: m.displayRole
+                      ? `${stripStatus(m.displayRole)} (done)`
+                      : "Tool (done)",
+                  }
+                : m
+            )
+          );
+          if (lastToolMessageId.current !== null) {
+            const targetId = lastToolMessageId.current;
+            const updated = lastToolSnapshotRef.current;
+            const doneContent = updated ? markToolContentAsDone(updated.content) : "";
+            const doneLabel = updated?.displayRole
+              ? `${stripStatus(updated.displayRole)} (done)`
+              : "Tool (done)";
+            lastToolSnapshotRef.current = { content: doneContent, displayRole: doneLabel };
+            optionsRef.current.onToolMessage?.({
+              content: doneContent,
+              displayRole: doneLabel,
+              final: true,
+              messageId: targetId,
+            });
+          }
+          toolPendingRef.current = false;
+          lastToolMessageId.current = null;
+          lastToolSnapshotRef.current = null;
+        }
         break;
 
       case "info":
         // Info messages (e.g., tool execution results)
         setStatusMessage(msg.message || "");
+        optionsRef.current.onInfo?.({ message: msg.message, raw: msg });
         break;
     }
   };
@@ -370,6 +571,7 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     connect,
     disconnect,
     sendMessage,
+    sendBackgroundMessage,
     interrupt,
     isConnected,
   };

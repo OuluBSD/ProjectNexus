@@ -1154,6 +1154,18 @@ export default function Page() {
     [metaChats]
   );
 
+  const waitForCondition = useCallback(
+    async (check: () => boolean, timeoutMs = 10000, intervalMs = 150) => {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (check()) return true;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+      return false;
+    },
+    []
+  );
+
   useEffect(() => {
     if (!autoDemoAiEnabled || autoDemoKickoffSent) return;
     if (isAutoDemoConnected) {
@@ -1758,18 +1770,6 @@ export default function Page() {
       setTerminalStatus(`Process exited (code ${exitMatch[1]})`);
     }
   };
-
-  const waitForCondition = useCallback(
-    async (check: () => boolean, timeoutMs = 10000, intervalMs = 150) => {
-      const start = Date.now();
-      while (Date.now() - start < timeoutMs) {
-        if (check()) return true;
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
-      }
-      return false;
-    },
-    []
-  );
 
   const loadChatsForRoadmap = useCallback(
     async (

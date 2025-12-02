@@ -3966,13 +3966,11 @@ export default function Page() {
                   </span>
                 </div>
               ))}
-              {aiStreamingPreview &&
-                !isMetaChatSelected &&
-                (messageFilter === "all" || messageFilter === "assistant") && (
-                  <div className="chat-row" key="assistant-streaming">
-                    <span className="chat-role chat-role-assistant">assistant</span>
-                    <div className="bubble" style={{ opacity: 0.85 }}>
-                      {aiStreamingPreview}
+              {aiStreamingPreview && !isMetaChatSelected && (
+                <div className="chat-row" key="assistant-streaming">
+                  <span className="chat-role chat-role-assistant">assistant</span>
+                  <div className="bubble" style={{ opacity: 0.85 }}>
+                    {aiStreamingPreview}
                       <span className="item-subtle" style={{ marginLeft: 8 }}>
                         streaming…
                       </span>

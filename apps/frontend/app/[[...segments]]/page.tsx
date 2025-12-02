@@ -1112,6 +1112,48 @@ export default function Page() {
     }
   }, [autoDemoAiEnabled, disconnectAutoDemo, isAutoDemoChat]);
 
+  const loadMessagesForChat = useCallback(
+    async (chatId: string, token: string) => {
+      if (!chatId) {
+        setMessages([]);
+        setMessagesError("Select a chat to load messages.");
+        setMessagesForChatId(null);
+        return;
+      }
+      setMessagesLoading(true);
+      setMessagesError(null);
+      try {
+        if (chatId.startsWith("meta-")) {
+          // Load meta-chat messages
+          const metaChatId = chatId.replace("meta-", "");
+          const metaChat = Object.values(metaChats).find((mc) => mc.roadmapListId === metaChatId);
+          if (metaChat) {
+            const items = await fetchMetaChatMessages(token, metaChat.id);
+            const mapped = items.map((m) => ({ ...m, chatId: m.metaChatId })) as MessageItem[];
+            setMessages(dedupeMessages(mapped));
+            setMessagesForChatId(chatId);
+          } else {
+            setMessages([]);
+            setMessagesError("Meta-chat not found");
+            setMessagesForChatId(null);
+          }
+        } else {
+          // Load regular chat messages
+          const items = await fetchChatMessages(token, chatId);
+          setMessages(dedupeMessages(items as MessageItem[]));
+          setMessagesForChatId(chatId);
+        }
+      } catch (err) {
+        setMessagesError(err instanceof Error ? err.message : "Failed to load messages");
+        setMessages([]);
+        setMessagesForChatId(null);
+      } finally {
+        setMessagesLoading(false);
+      }
+    },
+    [metaChats]
+  );
+
   useEffect(() => {
     if (!autoDemoAiEnabled || autoDemoKickoffSent) return;
     if (isAutoDemoConnected) {
@@ -1639,48 +1681,6 @@ export default function Page() {
       return null;
     }
   }, []);
-
-  const loadMessagesForChat = useCallback(
-    async (chatId: string, token: string) => {
-      if (!chatId) {
-        setMessages([]);
-        setMessagesError("Select a chat to load messages.");
-        setMessagesForChatId(null);
-        return;
-      }
-      setMessagesLoading(true);
-      setMessagesError(null);
-      try {
-        if (chatId.startsWith("meta-")) {
-          // Load meta-chat messages
-          const metaChatId = chatId.replace("meta-", "");
-          const metaChat = Object.values(metaChats).find((mc) => mc.roadmapListId === metaChatId);
-          if (metaChat) {
-            const items = await fetchMetaChatMessages(token, metaChat.id);
-            const mapped = items.map((m) => ({ ...m, chatId: m.metaChatId })) as MessageItem[];
-            setMessages(dedupeMessages(mapped));
-            setMessagesForChatId(chatId);
-          } else {
-            setMessages([]);
-            setMessagesError("Meta-chat not found");
-            setMessagesForChatId(null);
-          }
-        } else {
-          // Load regular chat messages
-          const items = await fetchChatMessages(token, chatId);
-          setMessages(dedupeMessages(items as MessageItem[]));
-          setMessagesForChatId(chatId);
-        }
-      } catch (err) {
-        setMessagesError(err instanceof Error ? err.message : "Failed to load messages");
-        setMessages([]);
-        setMessagesForChatId(null);
-      } finally {
-        setMessagesLoading(false);
-      }
-    },
-    [metaChats]
-  );
 
   const clearWorkspaceState = useCallback(
     (reason?: string) => {

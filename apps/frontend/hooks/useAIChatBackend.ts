@@ -397,9 +397,16 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
             setStreamingContent((prev) => {
               console.log(
                 `[useAIChatBackend:${connectionId.current}] Final accumulated length:`,
-                prev.length
+                prev.length,
+                "Final message content length:",
+                msg.content?.length || 0
               );
+              // Use accumulated content if available, otherwise use the final message content
+              // But never combine them to avoid duplication
               const finalContent = prev || msg.content || "";
+              console.log(
+                `[useAIChatBackend:${connectionId.current}] Using ${prev ? "accumulated" : "final message"} content`
+              );
               if (finalContent) {
                 const assistantMessage: ChatMessage = {
                   id: nextMessageId.current++,

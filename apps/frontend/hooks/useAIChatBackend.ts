@@ -45,7 +45,10 @@ interface UseAIChatBackendOptions {
   }) => void;
 }
 
-function formatToolCall(tool: any, opts?: { autoApproved?: boolean }): { label: string; content: string } {
+function formatToolCall(
+  tool: any,
+  opts?: { autoApproved?: boolean }
+): { label: string; content: string } {
   const rawLabel = (typeof tool?.tool_name === "string" && tool.tool_name.trim()) || "tool";
   const label =
     rawLabel.toLowerCase().includes("shell") || rawLabel.toLowerCase().includes("bash")
@@ -146,15 +149,15 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     // WebSocket endpoint for AI chat
     const backendUrl = resolveBackendBase();
     const wsBase = toWebSocketBase(backendUrl);
-    // Append connectionId to sessionId to ensure unique sessions even with React StrictMode double-mounting
-    const uniqueSessionId = `${options.sessionId}-${connectionId.current}`;
+    // Use the sessionId directly - the backend session manager handles multiple connections
+    // with reference counting, so we don't need to create unique session IDs per connection
     const challengeParam =
       options.allowChallenge === false ? "false" : options.allowChallenge === true ? "true" : "";
     const workspaceParam =
       options.workspacePath && options.workspacePath.trim()
         ? `&workspace=${encodeURIComponent(options.workspacePath.trim())}`
         : "";
-    const wsUrl = `${wsBase}/api/ai-chat/${uniqueSessionId}?backend=${
+    const wsUrl = `${wsBase}/api/ai-chat/${options.sessionId}?backend=${
       options.backend
     }&token=${options.token}${
       challengeParam ? `&challenge=${encodeURIComponent(challengeParam)}` : ""
@@ -167,29 +170,29 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     console.log("[useAIChatBackend] Creating WebSocket:", wsUrl);
     const ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {
-        console.log("[useAIChatBackend] WebSocket opened");
-        setStatus("idle");
-        setStatusMessage("Connected");
-        setIsConnected(true);
-        wsRef.current = ws;
-        // Flush any queued user messages
-        if (pendingMessagesRef.current.length) {
-          pendingMessagesRef.current.forEach((queued) => {
-            try {
-              ws.send(
-                JSON.stringify({
-                  type: "user_input",
-                  content: queued,
-                })
-              );
-            } catch (err) {
-              console.error("Failed to send queued message:", err);
-            }
-          });
-          pendingMessagesRef.current = [];
-        }
-      };
+    ws.onopen = () => {
+      console.log("[useAIChatBackend] WebSocket opened");
+      setStatus("idle");
+      setStatusMessage("Connected");
+      setIsConnected(true);
+      wsRef.current = ws;
+      // Flush any queued user messages
+      if (pendingMessagesRef.current.length) {
+        pendingMessagesRef.current.forEach((queued) => {
+          try {
+            ws.send(
+              JSON.stringify({
+                type: "user_input",
+                content: queued,
+              })
+            );
+          } catch (err) {
+            console.error("Failed to send queued message:", err);
+          }
+        });
+        pendingMessagesRef.current = [];
+      }
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -216,18 +219,18 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
       optionsRef.current.onStatusChange?.({ status: "error", message: "Connection error" });
     };
 
-      ws.onclose = () => {
-        setStatus("idle");
-        setStatusMessage("Disconnected");
-        setIsConnected(false);
-        setIsStreaming(false);
-        setStreamingContent("");
-        streamingContentRef.current = "";
-        wsRef.current = null;
-        toolPendingRef.current = false;
-        lastToolMessageId.current = null;
-        autoApprovedToolsRef.current.clear();
-      };
+    ws.onclose = () => {
+      setStatus("idle");
+      setStatusMessage("Disconnected");
+      setIsConnected(false);
+      setIsStreaming(false);
+      setStreamingContent("");
+      streamingContentRef.current = "";
+      wsRef.current = null;
+      toolPendingRef.current = false;
+      lastToolMessageId.current = null;
+      autoApprovedToolsRef.current.clear();
+    };
   }, [
     options.backend,
     options.sessionId,
@@ -267,37 +270,40 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
   }, []);
 
   // Send message to backend
-  const sendMessage = useCallback((content: string) => {
-    const ready = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
+  const sendMessage = useCallback(
+    (content: string) => {
+      const ready = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
 
-    const userMessage: ChatMessage = {
-      id: nextMessageId.current++,
-      role: "user",
-      content,
-      timestamp: Date.now(),
-    };
+      const userMessage: ChatMessage = {
+        id: nextMessageId.current++,
+        role: "user",
+        content,
+        timestamp: Date.now(),
+      };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setStatus("responding");
-    setIsStreaming(true);
-    setStreamingContent("");
-    streamingContentRef.current = "";
+      setMessages((prev) => [...prev, userMessage]);
+      setStatus("responding");
+      setIsStreaming(true);
+      setStreamingContent("");
+      streamingContentRef.current = "";
 
-    if (ready && wsRef.current) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: "user_input",
-          content,
-        })
-      );
-    } else {
-      // Queue until connection opens
-      pendingMessagesRef.current.push(content);
-      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-        connect();
+      if (ready && wsRef.current) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "user_input",
+            content,
+          })
+        );
+      } else {
+        // Queue until connection opens
+        pendingMessagesRef.current.push(content);
+        if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+          connect();
+        }
       }
-    }
-  }, [connect]);
+    },
+    [connect]
+  );
 
   // Send a message without adding it to the visible chat log (used for session hydration)
   const sendBackgroundMessage = useCallback(
@@ -535,7 +541,9 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
           );
           const content = toolDetails.map((tool) => tool.content).join("\n\n");
           const displayRole =
-            toolDetails.length === 1 ? toolDetails[0].label || "tool" : `${toolDetails.length} tools`;
+            toolDetails.length === 1
+              ? toolDetails[0].label || "tool"
+              : `${toolDetails.length} tools`;
           const toolMessage: ChatMessage = {
             id: nextMessageId.current++,
             role: "tool",
@@ -576,8 +584,7 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
             toNumber((msg as any).context_limit) ??
             toNumber((msg as any).contextLength);
           const contextRemaining =
-            toNumber((msg as any).context_tokens_left) ??
-            toNumber((msg as any).context_remaining);
+            toNumber((msg as any).context_tokens_left) ?? toNumber((msg as any).context_remaining);
 
           optionsRef.current.onCompletionStats?.({
             promptTokens,

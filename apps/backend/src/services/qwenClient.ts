@@ -14,6 +14,7 @@ import * as readline from "node:readline";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveQwenPath } from "@nexus/shared/qwenPath";
+import { processLogger } from "./processLogger";
 
 // Protocol message types (matching qwen-code protocol)
 export interface QwenInitMessage {
@@ -112,6 +113,29 @@ export interface QwenClientConfig {
   model?: string; // Model to use (e.g., 'qwen-2.5-flash')
   autoStart?: boolean; // Auto-start qwen process on connect (default: true)
   connectOnly?: boolean; // Only connect to existing server, don't spawn process (default: false, TCP only)
+  // Session tracking
+  purpose?: string; // Why this process was started
+  initiator?: {
+    type: "user" | "system";
+    userId?: string;
+    sessionId?: string;
+    username?: string;
+  };
+  attachments?: {
+    webSocketId?: string;
+    transport?: string;
+    chainInfo?: {
+      managerId?: string;
+      workerId?: string;
+      aiId?: string;
+    };
+  };
+  sessionInfo?: {
+    sessionId: string;
+    reopenCount: number;
+    firstOpened: Date;
+    lastOpened: Date;
+  };
 }
 
 /**
@@ -131,13 +155,39 @@ export class QwenClient {
     "qwen.pid"
   );
 
-  private config: Required<QwenClientConfig>;
+  private config: Required<
+    Omit<QwenClientConfig, "purpose" | "initiator" | "attachments" | "sessionInfo">
+  > & {
+    purpose?: string;
+    initiator?: {
+      type: "user" | "system";
+      userId?: string;
+      sessionId?: string;
+      username?: string;
+    };
+    attachments?: {
+      webSocketId?: string;
+      transport?: string;
+      chainInfo?: {
+        managerId?: string;
+        workerId?: string;
+        aiId?: string;
+      };
+    };
+    sessionInfo?: {
+      sessionId: string;
+      reopenCount: number;
+      firstOpened: Date;
+      lastOpened: Date;
+    };
+  };
   private process: ChildProcess | null = null;
   private socket: net.Socket | null = null;
   private buffer = "";
   private messageHandlers: ((msg: QwenServerMessage) => void)[] = [];
   private connected = false;
   private initReceived = false;
+  private processId: string | null = null;
 
   /**
    * Clean up any orphaned qwen processes from previous runs
@@ -188,7 +238,20 @@ export class QwenClient {
       model: config.model ?? "qwen-2.5-flash",
       autoStart: config.autoStart ?? true,
       connectOnly: config.connectOnly ?? false,
+      purpose: config.purpose,
+      initiator: config.initiator,
+      attachments: config.attachments,
+      sessionInfo: config.sessionInfo,
     };
+
+    console.log(`[QwenClient] Constructor called with config:`, {
+      mode: this.config.mode,
+      purpose: this.config.purpose,
+      initiatorType: this.config.initiator?.type,
+      sessionId: this.config.sessionInfo?.sessionId || this.config.initiator?.sessionId,
+      userId: this.config.initiator?.userId,
+      username: this.config.initiator?.username,
+    });
   }
 
   /**
@@ -224,6 +287,52 @@ export class QwenClient {
       }
     );
 
+    // Track process for debugging
+    this.processId = `qwen-${Date.now()}`;
+    processLogger.registerProcess({
+      id: this.processId,
+      type: "qwen",
+      name: this.config.purpose || "Qwen AI Process",
+      pid: this.process.pid,
+      command: this.config.qwenPath,
+      args: ["--server-mode", "stdin", "--approval-mode", "yolo"],
+      cwd: this.config.workspaceRoot,
+      startTime: new Date(),
+      status: "starting",
+      metadata: { model: this.config.model, mode: "stdio" },
+      purpose: this.config.purpose,
+      initiator: this.config.initiator,
+      attachments: this.config.attachments,
+      sessionInfo: this.config.sessionInfo,
+    });
+
+    // Update to running once PID is available
+    if (this.process.pid) {
+      processLogger.updateProcess(this.processId, { status: "running", pid: this.process.pid });
+    }
+
+    // Track stdout
+    this.process.stdout?.on("data", (data: Buffer) => {
+      const content = data.toString("utf8");
+      processLogger.logIO({
+        processId: this.processId!,
+        timestamp: new Date(),
+        direction: "stdout",
+        content,
+      });
+    });
+
+    // Track stderr
+    this.process.stderr?.on("data", (data: Buffer) => {
+      const content = data.toString("utf8");
+      processLogger.logIO({
+        processId: this.processId!,
+        timestamp: new Date(),
+        direction: "stderr",
+        content,
+      });
+    });
+
     // Write PID file for cleanup
     if (this.process.pid) {
       try {
@@ -237,12 +346,18 @@ export class QwenClient {
     // Handle process exit
     this.process.on("exit", (code, signal) => {
       console.log(`[QwenClient] Process exited with code ${code}, signal ${signal}`);
+      if (this.processId) {
+        processLogger.markProcessExited(this.processId, code, signal);
+      }
       this.cleanup();
     });
 
     // Handle process errors
     this.process.on("error", (err) => {
       console.error(`[QwenClient] Process error:`, err);
+      if (this.processId) {
+        processLogger.markProcessError(this.processId, err);
+      }
       this.cleanup();
     });
 
@@ -329,7 +444,9 @@ export class QwenClient {
    * Stop client and cleanup resources
    */
   async stop(): Promise<void> {
-    console.log(`[QwenClient] Stopping...`);
+    console.log(
+      `[QwenClient] Stopping... processId=${this.processId}, sessionId=${this.config.sessionInfo?.sessionId || this.config.initiator?.sessionId || "none"}`
+    );
     this.cleanup();
   }
 
@@ -440,6 +557,11 @@ export class QwenClient {
   private sendCommand(cmd: QwenCommand): void {
     const json = JSON.stringify(cmd) + "\n";
 
+    // Track stdin for debugging
+    if (this.processId) {
+      processLogger.logStdin(this.processId, json);
+    }
+
     if (this.config.mode === "stdio") {
       if (!this.process || !this.process.stdin) {
         throw new Error("Process stdin not available");
@@ -489,6 +611,34 @@ export class QwenClient {
       console.log(`[QwenClient] initReceived flag set to true`);
     }
 
+    // Track conversation messages
+    if (this.processId && msg.type === "conversation") {
+      processLogger.logConversationMessage({
+        processId: this.processId,
+        messageId: msg.id,
+        timestamp: new Date(msg.timestamp || Date.now()),
+        role: msg.role,
+        content: msg.content,
+        isStreaming: msg.isStreaming,
+      });
+    }
+
+    // Track tool usage
+    if (this.processId && msg.type === "tool_group") {
+      for (const tool of msg.tools) {
+        processLogger.logToolUsage({
+          processId: this.processId,
+          timestamp: new Date(),
+          toolGroupId: msg.id,
+          toolId: tool.tool_id,
+          toolName: tool.tool_name,
+          status: tool.status,
+          args: tool.args,
+          confirmationDetails: tool.confirmation_details,
+        });
+      }
+    }
+
     // Dispatch to handlers
     for (const handler of this.messageHandlers) {
       handler(msg);
@@ -525,6 +675,10 @@ export class QwenClient {
    * Cleanup resources
    */
   private cleanup(): void {
+    console.log(
+      `[QwenClient] cleanup() called for processId=${this.processId}, pid=${this.process?.pid}, sessionId=${this.config.sessionInfo?.sessionId || this.config.initiator?.sessionId || "none"}`
+    );
+
     this.connected = false;
     this.initReceived = false;
 
@@ -534,6 +688,7 @@ export class QwenClient {
     }
 
     if (this.process) {
+      console.log(`[QwenClient] Killing process pid=${this.process.pid}`);
       this.process.kill();
       this.process = null;
     }

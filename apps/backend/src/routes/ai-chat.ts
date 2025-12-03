@@ -2,7 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { validateToken } from "../utils/auth.js";
 import { AIBackendType } from "@nexus/shared/chat/AIBackend";
 import { QwenCommand } from "../services/qwenClient.js";
-import { createAiBridge, resolveAiChain } from "../services/aiChatBridge.js";
+import { resolveAiChain } from "../services/aiChatBridge.js";
+import { sessionManager } from "../services/sessionManager.js";
 
 const CHALLENGE_PROMPT = [
   "System instruction: Adopt a critical collaborator stance.",
@@ -49,7 +50,6 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
-    let bridgeCleanup: (() => Promise<void>) | null = null;
     const approvedToolGroups = new Set<number>();
     const allowChallenge = parseBooleanFlag(
       challenge,
@@ -57,6 +57,8 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
     );
     let suppressChallengeReply = allowChallenge;
     let challengeTimeout: NodeJS.Timeout | null = null;
+    let bridge: any = null;
+    const connectionId = `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     try {
       const chain = await resolveAiChain(fastify);
@@ -78,7 +80,10 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
         })
       );
 
-      const bridge = await createAiBridge(
+      // Use session manager to get or create bridge
+      const result = await sessionManager.getOrCreateBridge(
+        sessionId,
+        connectionId,
         fastify.log,
         chain,
         (msg: any) => {
@@ -121,8 +126,16 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
         },
         {
           workspaceRoot: workspace,
+          purpose: "AI Chat Session",
+          initiator: {
+            type: "user",
+            userId: session.userId,
+            sessionId: sessionId,
+            username: session.username,
+          },
         }
       );
+      bridge = result.bridge;
 
       connection.socket.send(
         JSON.stringify({
@@ -154,10 +167,6 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
         }, 5000);
       }
 
-      bridgeCleanup = async () => {
-        await bridge.shutdown();
-      };
-
       connection.socket.on("message", (data: Buffer) => {
         try {
           const message = JSON.parse(data.toString()) as QwenCommand;
@@ -179,17 +188,18 @@ export const aiChatRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     connection.socket.on("close", async () => {
-      fastify.log.info(`[AIChat] WebSocket for session ${sessionId} closed`);
+      fastify.log.info(
+        `[AIChat] WebSocket for session ${sessionId} connectionId=${connectionId} closed - releasing session`
+      );
       if (challengeTimeout) {
         clearTimeout(challengeTimeout);
         challengeTimeout = null;
       }
-      if (bridgeCleanup) {
-        try {
-          await bridgeCleanup();
-        } catch (err) {
-          fastify.log.error({ err }, "[AIChat] Error during bridge cleanup");
-        }
+      try {
+        await sessionManager.releaseSession(sessionId, connectionId, fastify.log);
+        fastify.log.info(`[AIChat] Session ${sessionId} connectionId=${connectionId} released`);
+      } catch (err) {
+        fastify.log.error({ err }, "[AIChat] Error during session release");
       }
     });
   });

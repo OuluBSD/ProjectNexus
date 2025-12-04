@@ -108,7 +108,7 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
   const nextMessageId = useRef(1);
   const wsRef = useRef<WebSocket | null>(null);
   const autoApprovedToolsRef = useRef<Set<string>>(new Set());
-  const connectionId = useRef(Math.random().toString(36));
+  const connectionIdRef = useRef<string | null>(null); // Will be set on each connect
   const streamingContentRef = useRef("");
   const optionsRef = useRef(options);
   const pendingMessagesRef = useRef<string[]>([]);
@@ -120,19 +120,15 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
     optionsRef.current = options;
   }, [options]);
 
-  // Log connection ID once on mount for debugging
-  useEffect(() => {
-    console.log(
-      "[useAIChatBackend] Hook instance created with connectionId:",
-      connectionId.current
-    );
-  }, []);
-
   // Connect to backend via WebSocket
   const connect = useCallback(() => {
+    // Generate a new connection ID for each connection attempt
+    const newConnectionId = `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    connectionIdRef.current = newConnectionId;
+
     console.log(
-      "[useAIChatBackend] connect() called, connectionId:",
-      connectionId.current,
+      "[useAIChatBackend] connect() called, new connectionId:",
+      newConnectionId,
       "wsRef.current:",
       wsRef.current
     );
@@ -374,13 +370,13 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
           if (msg.isStreaming !== false) {
             // Streaming chunk - accumulate in frontend
             console.log(
-              `[useAIChatBackend:${connectionId.current}] Streaming chunk, chunk length:`,
+              `[useAIChatBackend:${connectionIdRef.current}] Streaming chunk, chunk length:`,
               msg.content?.length || 0
             );
             setStreamingContent((prev) => {
               const newContent = prev + (msg.content || "");
               console.log(
-                `[useAIChatBackend:${connectionId.current}] Accumulated length:`,
+                `[useAIChatBackend:${connectionIdRef.current}] Accumulated length:`,
                 newContent.length
               );
               streamingContentRef.current = newContent;
@@ -392,11 +388,11 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
           } else {
             // Streaming ended - finalize the accumulated streaming content
             console.log(
-              `[useAIChatBackend:${connectionId.current}] Streaming ended, finalizing accumulated content`
+              `[useAIChatBackend:${connectionIdRef.current}] Streaming ended, finalizing accumulated content`
             );
             setStreamingContent((prev) => {
               console.log(
-                `[useAIChatBackend:${connectionId.current}] Final accumulated length:`,
+                `[useAIChatBackend:${connectionIdRef.current}] Final accumulated length:`,
                 prev.length,
                 "Final message content length:",
                 msg.content?.length || 0
@@ -405,7 +401,7 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
               // But never combine them to avoid duplication
               const finalContent = prev || msg.content || "";
               console.log(
-                `[useAIChatBackend:${connectionId.current}] Using ${prev ? "accumulated" : "final message"} content`
+                `[useAIChatBackend:${connectionIdRef.current}] Using ${prev ? "accumulated" : "final message"} content`
               );
               if (finalContent) {
                 const assistantMessage: ChatMessage = {
@@ -415,7 +411,7 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
                   timestamp: Date.now(),
                 };
                 console.log(
-                  `[useAIChatBackend:${connectionId.current}] Adding message to state, ID:`,
+                  `[useAIChatBackend:${connectionIdRef.current}] Adding message to state, ID:`,
                   assistantMessage.id
                 );
                 setMessages((msgs) => {
@@ -427,7 +423,7 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
                     lastMsg.content === assistantMessage.content
                   ) {
                     console.log(
-                      `[useAIChatBackend:${connectionId.current}] Skipping duplicate message`
+                      `[useAIChatBackend:${connectionIdRef.current}] Skipping duplicate message`
                     );
                     return msgs;
                   }

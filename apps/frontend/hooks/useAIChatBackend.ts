@@ -513,6 +513,43 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
         break;
 
       case "tool_group":
+        // If we have streaming content, finalize it first before adding tool message
+        // to ensure correct message ordering (assistant message should appear before tool message)
+        if (streamingContentRef.current) {
+          const finalContent = streamingContentRef.current;
+          if (finalContent) {
+            const assistantMessage: ChatMessage = {
+              id: nextMessageId.current++,
+              role: "assistant",
+              content: finalContent,
+              timestamp: Date.now(),
+            };
+            console.log(
+              `[useAIChatBackend:${connectionIdRef.current}] Finalizing streaming content before tool_group, ID:`,
+              assistantMessage.id
+            );
+            setMessages((msgs) => {
+              // Deduplication: Don't add if the last message has the exact same content
+              const lastMsg = msgs[msgs.length - 1];
+              if (
+                lastMsg &&
+                lastMsg.role === "assistant" &&
+                lastMsg.content === assistantMessage.content
+              ) {
+                console.log(
+                  `[useAIChatBackend:${connectionIdRef.current}] Skipping duplicate message before tool_group`
+                );
+                return msgs;
+              }
+              return [...msgs, assistantMessage];
+            });
+            optionsRef.current.onAssistantMessage?.({ content: finalContent, final: true });
+          }
+          setStreamingContent("");
+          streamingContentRef.current = "";
+          setIsStreaming(false);
+        }
+
         // Tool execution notification
         setStatusMessage(`Executing ${msg.tools?.length || 0} tool(s)...`);
         const autoApproved: string[] = [];

@@ -414,21 +414,15 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
       case "conversation":
         if (msg.role === "assistant") {
           if (msg.isStreaming !== false) {
-            // Streaming chunk - accumulate in frontend
+            // Streaming chunk - backend sends accumulated content, not deltas
+            const content = msg.content || "";
             console.log(
-              `[useAIChatBackend:${connectionIdRef.current}] Streaming chunk, chunk length:`,
-              msg.content?.length || 0
+              `[useAIChatBackend:${connectionIdRef.current}] Streaming chunk, content length:`,
+              content.length
             );
-            setStreamingContent((prev) => {
-              const newContent = prev + (msg.content || "");
-              console.log(
-                `[useAIChatBackend:${connectionIdRef.current}] Accumulated length:`,
-                newContent.length
-              );
-              streamingContentRef.current = newContent;
-              optionsRef.current.onAssistantMessage?.({ content: newContent, final: false });
-              return newContent;
-            });
+            setStreamingContent(content);
+            streamingContentRef.current = content;
+            optionsRef.current.onAssistantMessage?.({ content, final: false });
             setIsStreaming(true);
             setStatusMessage(""); // Clear any tool execution messages
           } else {

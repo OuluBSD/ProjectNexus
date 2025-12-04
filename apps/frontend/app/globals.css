@@ -1416,6 +1416,14 @@ body {
   font-weight: 500;
 }
 
+.network-empty-note {
+  padding: 10px 12px;
+  background: var(--ghost);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .network-main {
   flex: 1;
   overflow-y: auto;
@@ -1488,6 +1496,66 @@ body {
   height: 100%;
   color: var(--muted);
   font-size: 16px;
+}
+
+.network-graph-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.network-graph-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.network-graph-subtitle {
+  margin: 4px 0 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.network-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.legend-dot.manager {
+  background: #6366f1;
+}
+
+.legend-dot.worker {
+  background: #10b981;
+}
+
+.legend-dot.ai {
+  background: #f59e0b;
+}
+
+.legend-dot.connection {
+  background: #0ea5e9;
+}
+
+.network-graph {
+  width: 100%;
+  min-height: 320px;
+  margin-top: 12px;
 }
 
 /* Settings overlay */

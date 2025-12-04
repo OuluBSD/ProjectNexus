@@ -26,6 +26,7 @@ interface UseAIChatBackendOptions {
   disableFilesystem?: boolean;
   allowChallenge?: boolean;
   workspacePath?: string | null;
+  initialMessages?: ChatMessage[];
   onAssistantMessage?: (payload: { content: string; final: boolean }) => void;
   onStatusChange?: (payload: { status: ChatStatus; message?: string; context?: string }) => void;
   onInfo?: (payload: { message?: string; raw?: any }) => void;
@@ -130,7 +131,7 @@ function markToolContentAsDone(content: string): string {
 }
 
 export function useAIChatBackend(options: UseAIChatBackendOptions) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(options.initialMessages || []);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [statusContext, setStatusContext] = useState<string | undefined>(undefined);
@@ -151,6 +152,26 @@ export function useAIChatBackend(options: UseAIChatBackendOptions) {
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
+
+  // Reset local state when switching sessions so each tab keeps its own history
+  useEffect(() => {
+    const initial = optionsRef.current.initialMessages || [];
+    setMessages(initial);
+    const maxId = initial.reduce((max, msg) => Math.max(max, msg.id || 0), 0);
+    nextMessageId.current = maxId + 1;
+    setStatus("idle");
+    setStatusMessage("");
+    setStatusContext(undefined);
+    setIsStreaming(false);
+    setStreamingContent("");
+    streamingContentRef.current = "";
+    pendingMessagesRef.current = [];
+    lastToolMessageId.current = null;
+    lastToolSnapshotRef.current = null;
+    toolPendingRef.current = false;
+    autoApprovedToolsRef.current = new Set();
+    setIsConnected(false);
+  }, [options.sessionId]);
 
   // Connect to backend via WebSocket
   const connect = useCallback(() => {

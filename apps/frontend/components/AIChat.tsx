@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { AIBackendType } from "@nexus/shared/chat";
 import { useAIChatBackend } from "../hooks/useAIChatBackend";
 
@@ -20,7 +20,7 @@ interface ChatMessage {
 
 interface ChatSession {
   id: string;
-  name: string;
+  name?: string;
   backend: AIBackendType;
 }
 
@@ -29,6 +29,42 @@ interface AIChatProps {
   onBackendConnect?: (backend: AIBackendType) => void;
   onBackendDisconnect?: () => void;
 }
+
+const createSessionId = () =>
+  `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createSession = (backend: AIBackendType, name?: string): ChatSession => ({
+  id: createSessionId(),
+  name: name?.trim() || "",
+  backend,
+});
+
+const loadInitialSessionState = (): { sessions: ChatSession[]; activeId: string } => {
+  const fallbackSession = createSession("qwen");
+  if (typeof window === "undefined") {
+    return { sessions: [fallbackSession], activeId: fallbackSession.id };
+  }
+
+  try {
+    const savedRaw = localStorage.getItem("ai-chat-sessions");
+    const saved = savedRaw ? JSON.parse(savedRaw) : null;
+    const validSaved = Array.isArray(saved)
+      ? saved.filter((s) => s && typeof s.id === "string" && typeof s.backend === "string")
+      : [];
+    const sessions = validSaved.length > 0 ? validSaved : [fallbackSession];
+
+    const savedActive = localStorage.getItem("ai-chat-active-session");
+    const activeId =
+      savedActive && sessions.some((s) => s.id === savedActive)
+        ? savedActive
+        : sessions[0].id || fallbackSession.id;
+
+    return { sessions, activeId };
+  } catch (err) {
+    console.error("Failed to load saved sessions:", err);
+    return { sessions: [fallbackSession], activeId: fallbackSession.id };
+  }
+};
 
 export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: AIChatProps) {
   const parseBool = (value: string | undefined, fallback: boolean) => {
@@ -39,50 +75,18 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
     return fallback;
   };
 
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    // Try to load from localStorage first
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("ai-chat-sessions");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        } catch (err) {
-          console.error("Failed to load saved sessions:", err);
-        }
-      }
-    }
-    // Default: create initial session with timestamp ID
-    return [
-      {
-        id: Date.now().toString(),
-        name: "Chat 1",
-        backend: "qwen",
-      },
-    ];
-  });
-  const [activeSessionId, setActiveSessionId] = useState(() => {
-    // Set to the first session ID from loaded sessions
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("ai-chat-sessions");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
-            return parsed[0].id;
-          }
-        } catch (err) {
-          // Fall through to default
-        }
-      }
-    }
-    // Default to first session (will be generated timestamp)
-    return Date.now().toString();
-  });
-  const [selectedBackend, setSelectedBackend] = useState<AIBackendType>("qwen");
+  const { sessions: initialSessions, activeId: initialActiveId } = useMemo(
+    () => loadInitialSessionState(),
+    []
+  );
+
+  const [sessions, setSessions] = useState<ChatSession[]>(initialSessions);
+  const [activeSessionId, setActiveSessionId] = useState<string>(initialActiveId);
+  const [selectedBackend, setSelectedBackend] = useState<AIBackendType>(
+    initialSessions.find((s) => s.id === initialActiveId)?.backend || initialSessions[0]?.backend || "qwen"
+  );
   const [inputValue, setInputValue] = useState("");
+  const [sessionMessages, setSessionMessages] = useState<Record<string, ChatMessage[]>>({});
   const [allowChallenge, setAllowChallenge] = useState(() =>
     parseBool(process.env.NEXT_PUBLIC_ASSISTANT_CHALLENGE_ENABLED, true)
   );
@@ -91,6 +95,7 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const activeSessionMessages = sessionMessages[activeSessionId] || [];
 
   // Use the AI chat backend hook
   const {
@@ -110,6 +115,7 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
     sessionId: activeSessionId,
     token: sessionToken || "",
     allowChallenge,
+    initialMessages: activeSessionMessages,
   });
 
   // Auto-connect when session token is available and disconnect on session change
@@ -156,6 +162,29 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
     }
   }, [sessions]);
 
+  // Persist active session
+  useEffect(() => {
+    if (typeof window !== "undefined" && activeSessionId) {
+      localStorage.setItem("ai-chat-active-session", activeSessionId);
+    }
+  }, [activeSessionId]);
+
+  // Keep backend selector in sync with the active session
+  useEffect(() => {
+    if (activeSession && activeSession.backend !== selectedBackend) {
+      setSelectedBackend(activeSession.backend);
+    }
+  }, [activeSession, selectedBackend]);
+
+  // Cache messages per session so switching tabs restores history
+  useEffect(() => {
+    if (!activeSessionId) return;
+    setSessionMessages((prev) => {
+      if (prev[activeSessionId] === messages) return prev;
+      return { ...prev, [activeSessionId]: messages };
+    });
+  }, [activeSessionId, messages]);
+
   const handleSend = useCallback(() => {
     if (!inputValue.trim() || !sessionToken) return;
 
@@ -179,42 +208,57 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
 
   const handleNewSession = useCallback(() => {
     const newSession: ChatSession = {
-      id: Date.now().toString(),
-      name: `Chat ${sessions.length + 1}`,
-      messages: [],
+      id: createSessionId(),
+      name: "",
       backend: selectedBackend,
     };
     setSessions((prev) => [...prev, newSession]);
+    setSessionMessages((prev) => ({ ...prev, [newSession.id]: [] }));
     setActiveSessionId(newSession.id);
-  }, [sessions.length, selectedBackend]);
+  }, [selectedBackend]);
+
+  const handleBackendChange = useCallback(
+    (backend: AIBackendType) => {
+      setSelectedBackend(backend);
+      setSessions((prev) => prev.map((s) => (s.id === activeSessionId ? { ...s, backend } : s)));
+    },
+    [activeSessionId]
+  );
 
   const handleCloseSession = useCallback(
     (sessionId: string) => {
-      setSessions((prev) => {
-        const filtered = prev.filter((s) => s.id !== sessionId);
-        if (filtered.length === 0) {
-          // Always keep at least one session
-          const newSession = {
-            id: Date.now().toString(),
-            name: "Chat 1",
-            backend: selectedBackend,
-          };
-          // Update activeSessionId to match the new session
-          setActiveSessionId(newSession.id);
-          return [newSession];
-        }
-        return filtered;
-      });
-
-      // Switch to another session if we closed the active one
-      if (sessionId === activeSessionId) {
-        const remaining = sessions.filter((s) => s.id !== sessionId);
-        if (remaining.length > 0) {
-          setActiveSessionId(remaining[0].id);
-        }
+      const remaining = sessions.filter((s) => s.id !== sessionId);
+      if (remaining.length === 0) {
+        const newSession = createSession(selectedBackend);
+        setSessions([newSession]);
+        setActiveSessionId(newSession.id);
+        setSelectedBackend(newSession.backend);
+        setSessionMessages((prev) => {
+          const next = { ...prev };
+          delete next[sessionId];
+          next[newSession.id] = next[newSession.id] || [];
+          return next;
+        });
+        return;
       }
+
+      setSessions(remaining);
+      if (sessionId === activeSessionId) {
+        setActiveSessionId(remaining[0].id);
+        setSelectedBackend(remaining[0].backend);
+      }
+      setSessionMessages((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
     },
     [activeSessionId, sessions, selectedBackend]
+  );
+
+  const getSessionLabel = useCallback(
+    (session: ChatSession, index: number) => session.name?.trim() || `Chat ${index + 1}`,
+    []
   );
 
   const formatTime = (timestamp: number) => {
@@ -300,13 +344,13 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
       {/* Header with sessions and controls */}
       <div className="ai-chat-header">
         <div className="ai-chat-sessions">
-          {sessions.map((session) => (
+          {sessions.map((session, idx) => (
             <div
               key={session.id}
               className={`ai-chat-session-tab ${session.id === activeSessionId ? "active" : ""}`}
               onClick={() => setActiveSessionId(session.id)}
             >
-              <span>{session.name}</span>
+              <span>{getSessionLabel(session, idx)}</span>
               {sessions.length > 1 && (
                 <button
                   className="ai-chat-session-close"
@@ -329,7 +373,7 @@ export function AIChat({ sessionToken, onBackendConnect, onBackendDisconnect }: 
           <select
             className="ai-chat-backend-select"
             value={selectedBackend}
-            onChange={(e) => setSelectedBackend(e.target.value as AIBackendType)}
+            onChange={(e) => handleBackendChange(e.target.value as AIBackendType)}
           >
             <option value="qwen">Qwen</option>
             <option value="claude">Claude</option>

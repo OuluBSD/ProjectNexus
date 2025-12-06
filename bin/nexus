@@ -1,0 +1,42 @@
+#!/usr/bin/env node
+
+// Nexus CLI Entry Point
+// This is the main entry point for the Nexus CLI
+// It parses command line arguments, runs them through the parser, 
+// sends them to the runtime, and returns output as JSON
+
+const { parseCommandLine } = require('./src/parser');
+const { executeCommand } = require('./src/runtime');
+
+async function main() {
+  try {
+    // Get command line arguments (skip 'node' and script path)
+    const input = process.argv.slice(2).join(' ');
+    
+    // Parse the command
+    const parsedCommand = parseCommandLine(input);
+    
+    // Execute the command through the runtime
+    const result = await executeCommand(parsedCommand);
+    
+    // Output the result as JSON
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    // Handle errors and output as JSON error
+    const errorResult = {
+      status: 'error',
+      data: null,
+      message: error.message,
+      errors: [{
+        type: 'CLI_ERROR',
+        message: error.message,
+        timestamp: new Date().toISOString()
+      }]
+    };
+    console.error(JSON.stringify(errorResult, null, 2));
+    process.exit(1);
+  }
+}
+
+// Run the main function
+main();

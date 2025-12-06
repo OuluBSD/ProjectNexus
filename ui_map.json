@@ -1,0 +1,609 @@
+{
+  "pages": [
+    {
+      "id": "agent-manager",
+      "label": "Agent Manager",
+      "path": "/projects/:projectId/roadmaps/:roadmapId/chats/:chatId",
+      "layout": {
+        "regions": [
+          {
+            "name": "sidebar",
+            "widgets": [
+              {
+                "type": "hierarchicalList",
+                "id": "projects-column",
+                "configuration": {
+                  "entityType": "project",
+                  "filterable": true
+                }
+              },
+              {
+                "type": "hierarchicalList",
+                "id": "roadmaps-column", 
+                "configuration": {
+                  "entityType": "roadmap",
+                  "filterable": true,
+                  "requires": "project"
+                }
+              },
+              {
+                "type": "hierarchicalList",
+                "id": "chats-column",
+                "configuration": {
+                  "entityType": "chat",
+                  "filterable": false,
+                  "requires": "roadmap"
+                }
+              }
+            ]
+          },
+          {
+            "name": "main",
+            "widgets": [
+              {
+                "type": "chatPane",
+                "id": "chat-panel",
+                "configuration": {
+                  "supports": ["messages", "file-sharing"],
+                  "role": "primary-chat"
+                }
+              },
+              {
+                "type": "terminalPane",
+                "id": "terminal-panel",
+                "configuration": {
+                  "requires": "project",
+                  "supports": ["commands", "file-system"]
+                }
+              },
+              {
+                "type": "codeBrowser",
+                "id": "code-panel",
+                "configuration": {
+                  "requires": "project",
+                  "supports": ["file-navigation", "editing", "diff-viewing"]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "create-project",
+          "label": "Add project",
+          "kind": "button",
+          "effects": {
+            "apiCalls": ["POST /api/projects"],
+            "stateChanges": ["projects-list-update", "selection-change"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "edit-project",
+          "label": "Edit project",
+          "kind": "contextMenuItem",
+          "effects": {
+            "apiCalls": ["PUT /api/projects/{projectId}"],
+            "stateChanges": ["projects-list-update"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "delete-project", 
+          "label": "Remove project",
+          "kind": "contextMenuItem",
+          "effects": {
+            "apiCalls": ["DELETE /api/projects/{projectId}"],
+            "stateChanges": ["projects-list-update", "reset-dependencies"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "create-roadmap",
+          "label": "Add roadmap",
+          "kind": "button", 
+          "effects": {
+            "apiCalls": ["POST /api/projects/{projectId}/roadmaps"],
+            "stateChanges": ["roadmaps-list-update", "selection-change"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "edit-roadmap",
+          "label": "Edit roadmap",
+          "kind": "contextMenuItem",
+          "effects": {
+            "apiCalls": ["PUT /api/roadmaps/{roadmapId}"],
+            "stateChanges": ["roadmaps-list-update"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "create-chat",
+          "label": "Add chat",
+          "kind": "button",
+          "effects": {
+            "apiCalls": ["POST /api/roadmaps/{roadmapId}/chats"],
+            "stateChanges": ["chats-list-update", "selection-change"], 
+            "navigation": null
+          }
+        },
+        {
+          "id": "rename-chat",
+          "label": "Rename chat",
+          "kind": "contextMenuItem",
+          "effects": {
+            "apiCalls": ["PUT /api/chats/{chatId}"],
+            "stateChanges": ["chats-list-update"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "save-file",
+          "label": "Save file",
+          "kind": "toolbarIcon",
+          "effects": {
+            "apiCalls": ["POST /api/files/content"],
+            "stateChanges": ["update-file-cache"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "send-message",
+          "label": "Send message",
+          "kind": "button",
+          "effects": {
+            "apiCalls": ["POST /api/chats/{chatId}/messages"],
+            "stateChanges": ["add-message-to-chat"],
+            "navigation": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "ai-chat",
+      "label": "AI Chat", 
+      "path": "/ai-chat",
+      "layout": {
+        "regions": [
+          {
+            "name": "sidebar",
+            "widgets": [
+              {
+                "type": "tabbedList", 
+                "id": "sessions-list",
+                "configuration": {
+                  "entityType": "chat-session",
+                  "tabs": ["active", "history"]
+                }
+              }
+            ]
+          },
+          {
+            "name": "main",
+            "widgets": [
+              {
+                "type": "chatPane",
+                "id": "ai-chat-messages",
+                "configuration": {
+                  "supports": ["ai-conversation", "tools", "file-sharing"],
+                  "role": "ai-assistant"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "create-session",
+          "label": "New session",
+          "kind": "button",
+          "effects": {
+            "apiCalls": ["init-websocket-connection"],
+            "stateChanges": ["create-session", "activate-session"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "switch-backend",
+          "label": "Switch backend", 
+          "kind": "menuItem",
+          "effects": {
+            "apiCalls": ["reconnect-websocket"],
+            "stateChanges": ["update-backend-setting", "reconnect-session"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "send-message",
+          "label": "Send message",
+          "kind": "button",
+          "effects": {
+            "apiCalls": ["websocket-send-message", "POST /api/ai-chat/{sessionId}/send"],
+            "stateChanges": ["add-message", "update-streaming-content"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "interrupt-response",
+          "label": "Interrupt",
+          "kind": "button",
+          "effects": {
+            "apiCalls": ["websocket-send-interrupt"],
+            "stateChanges": ["stop-streaming", "update-status"],
+            "navigation": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "network",
+      "label": "Network",
+      "path": "/network",
+      "layout": {
+        "regions": [
+          {
+            "name": "sidebar",
+            "widgets": [
+              {
+                "type": "filterableList",
+                "id": "network-elements",
+                "configuration": {
+                  "entityType": "network-element",
+                  "filters": ["type", "status"],
+                  "types": ["server", "connection", "process"]
+                }
+              }
+            ]
+          },
+          {
+            "name": "main",
+            "widgets": [
+              {
+                "type": "graphView",
+                "id": "connection-graph",
+                "configuration": {
+                  "visualization": "network-diagram",
+                  "interactable": true
+                }
+              },
+              {
+                "type": "detailPanel", 
+                "id": "element-details",
+                "configuration": {
+                  "requires": "selection",
+                  "show": ["status", "metadata", "connections"]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "view-server-details",
+          "label": "View details",
+          "kind": "contextMenuItem",
+          "effects": {
+            "apiCalls": ["GET /api/network/servers/{serverId}"],
+            "stateChanges": ["update-details-panel"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "refresh-status",
+          "label": "Refresh",
+          "kind": "toolbarIcon",
+          "effects": {
+            "apiCalls": ["GET /api/network/status"],
+            "stateChanges": ["update-list", "update-graph"],
+            "navigation": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "debug",
+      "label": "Debug",
+      "path": "/debug",
+      "layout": {
+        "regions": [
+          {
+            "name": "sidebar",
+            "widgets": [
+              {
+                "type": "filterableList",
+                "id": "process-list",
+                "configuration": {
+                  "entityType": "process",
+                  "filters": ["status", "type"],
+                  "types": ["qwen", "terminal", "git", "other"]
+                }
+              }
+            ]
+          },
+          {
+            "name": "main",
+            "widgets": [
+              {
+                "type": "detailPanel",
+                "id": "process-details",
+                "configuration": {
+                  "requires": "selection",
+                  "show": ["metadata", "logs", "io"]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "view-process-details",
+          "label": "View details",
+          "kind": "contextMenuItem",
+          "effects": {
+            "apiCalls": ["GET /api/debug/processes/{processId}"],
+            "stateChanges": ["update-details-panel"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "refresh-data",
+          "label": "Refresh",
+          "kind": "toolbarIcon", 
+          "effects": {
+            "apiCalls": ["GET /api/debug/processes"],
+            "stateChanges": ["update-list", "update-cache"],
+            "navigation": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "path": "/settings",
+      "layout": {
+        "regions": [
+          {
+            "name": "sidebar",
+            "widgets": [
+              {
+                "type": "settingsNav",
+                "id": "settings-categories",
+                "configuration": {
+                  "categories": ["appearance", "workspace"]
+                }
+              }
+            ]
+          },
+          {
+            "name": "main",
+            "widgets": [
+              {
+                "type": "settingsForm",
+                "id": "settings-form",
+                "configuration": {
+                  "category": "appearance",
+                  "fields": ["theme-mode", "palette"]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "change-theme",
+          "label": "Change theme",
+          "kind": "formField",
+          "effects": {
+            "apiCalls": [],
+            "stateChanges": ["update-theme-palette"],
+            "navigation": null
+          }
+        },
+        {
+          "id": "toggle-terminal-auto",
+          "label": "Auto-open terminal",
+          "kind": "formField",
+          "effects": {
+            "apiCalls": [],
+            "stateChanges": ["update-workspace-setting"],
+            "navigation": null
+          }
+        }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "project",
+      "idField": "id",
+      "listedOnPages": ["agent-manager"],
+      "operations": {
+        "create": ["create-project"],
+        "read": ["fetchProjects", "fetchProjectDetails"],
+        "update": ["edit-project"],
+        "delete": ["delete-project"]
+      }
+    },
+    {
+      "name": "roadmap",
+      "idField": "id",
+      "listedOnPages": ["agent-manager"],
+      "operations": {
+        "create": ["create-roadmap"],
+        "read": ["fetchRoadmaps", "fetchRoadmapStatus"],
+        "update": ["edit-roadmap"],
+        "delete": []
+      }
+    },
+    {
+      "name": "chat",
+      "idField": "id", 
+      "listedOnPages": ["agent-manager"],
+      "operations": {
+        "create": ["create-chat"],
+        "read": ["fetchChats", "fetchChatMessages"],
+        "update": ["rename-chat", "updateChatStatus"],
+        "delete": []
+      }
+    },
+    {
+      "name": "server",
+      "idField": "id",
+      "listedOnPages": ["network"],
+      "operations": {
+        "create": [],
+        "read": ["fetchNetworkElements"],
+        "update": [],
+        "delete": []
+      }
+    },
+    {
+      "name": "process",
+      "idField": "id", 
+      "listedOnPages": ["debug"],
+      "operations": {
+        "create": [],
+        "read": ["fetchProcesses"],
+        "update": [],
+        "delete": []
+      }
+    },
+    {
+      "name": "chat-session",
+      "idField": "id",
+      "listedOnPages": ["ai-chat"],
+      "operations": {
+        "create": ["create-session"],
+        "read": ["getMessages"],
+        "update": ["switch-backend"],
+        "delete": []
+      }
+    }
+  ],
+  "apis": [
+    {
+      "name": "auth-api",
+      "type": "REST",
+      "endpoint": "/api/auth/login",
+      "methods": ["POST"],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "username": {"type": "string"},
+          "password": {"type": "string"}
+        }
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "token": {"type": "string"},
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "username": {"type": "string"}
+            }
+          }
+        }
+      },
+      "usedBy": ["login"]
+    },
+    {
+      "name": "projects-api",
+      "type": "REST", 
+      "endpoint": "/api/projects",
+      "methods": ["GET", "POST"],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "category": {"type": "string"},
+          "description": {"type": "string"}
+        }
+      },
+      "responseSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "category": {"type": "string"},
+            "status": {"type": "string"}
+          }
+        }
+      },
+      "usedBy": ["agent-manager", "create-project", "edit-project"]
+    },
+    {
+      "name": "chat-websocket",
+      "type": "WebSocket",
+      "endpoint": "/api/ai-chat/{sessionId}",
+      "methods": ["WS"],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"},
+          "content": {"type": "string"}
+        }
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"},
+          "role": {"type": "string"},
+          "content": {"type": "string"}
+        }
+      },
+      "usedBy": ["ai-chat", "send-message"]
+    },
+    {
+      "name": "meta-chat-websocket",
+      "type": "WebSocket",
+      "endpoint": "/api/roadmaps/{roadmapId}/meta-chat/stream",
+      "methods": ["WS"],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"}
+        }
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"},
+          "data": {"type": "object"}
+        }
+      },
+      "usedBy": ["agent-manager"]
+    },
+    {
+      "name": "terminal-api",
+      "type": "REST",
+      "endpoint": "/api/terminal/sessions",
+      "methods": ["POST"],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {"type": "string"},
+          "cwd": {"type": "string"}
+        }
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "sessionId": {"type": "string"},
+          "wsCandidates": {"type": "array", "items": {"type": "string"}}
+        }
+      },
+      "usedBy": ["agent-manager", "terminal"]
+    }
+  ]
+}

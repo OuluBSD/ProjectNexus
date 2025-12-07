@@ -27,6 +27,9 @@ import { AuthStatusHandler } from './auth/status';
 import { NetworkElementListHandler } from './network/element/list';
 import { NetworkElementViewHandler } from './network/element/view';
 import { NetworkStatusHandler } from './network/status';
+import { NetworkHealthStreamHandler } from './network/streaming/health-stream';
+import { NetworkGraphStreamHandler } from './network/streaming/graph-stream';
+import { NetworkElementMonitorHandler } from './network/streaming/element-monitor';
 
 // Debug commands
 import { DebugProcessListHandler } from './debug/process/list';
@@ -47,6 +50,9 @@ import { DebugWebSocketStreamHandler } from './debug/websocket/stream';
 import { DebugPollListHandler } from './debug/poll/list';
 import { DebugPollViewHandler } from './debug/poll/view';
 import { DebugPollStreamHandler } from './debug/poll/stream';
+
+// System commands
+import { SystemParityHandler } from './system/parity';
 
 // Register all command handlers
 export function registerCommandHandlers(): void {
@@ -80,6 +86,9 @@ export function registerCommandHandlers(): void {
   handlerRegistry.register('network.element.list', new NetworkElementListHandler());
   handlerRegistry.register('network.element.view', new NetworkElementViewHandler());
   handlerRegistry.register('network.status', new NetworkStatusHandler());
+  handlerRegistry.register('network.health.stream', new NetworkHealthStreamHandler());
+  handlerRegistry.register('network.graph.stream', new NetworkGraphStreamHandler());
+  handlerRegistry.register('network.element.monitor', new NetworkElementMonitorHandler());
 
   // Debug process commands
   handlerRegistry.register('debug.process.list', new DebugProcessListHandler());
@@ -103,6 +112,9 @@ export function registerCommandHandlers(): void {
   handlerRegistry.register('debug.poll.list', new DebugPollListHandler());
   handlerRegistry.register('debug.poll.view', new DebugPollViewHandler());
   handlerRegistry.register('debug.poll.stream', new DebugPollStreamHandler());
+
+  // System commands
+  handlerRegistry.register('system.parity', new SystemParityHandler());
 
   // Add more handlers as they are implemented
 }

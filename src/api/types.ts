@@ -67,6 +67,7 @@ export interface GetProjectResponse {
 // Roadmap types
 export interface RoadmapSummary {
   id: string;
+  selected?: boolean;  // Indicates if this roadmap is currently selected
   title: string;
   status: string;
   progress: number;
@@ -75,6 +76,13 @@ export interface RoadmapSummary {
   metaStatus: string;
   metaProgress: number;
   metaSummary: string;
+  projectRef?: string;  // Reference to the project it belongs to
+  projectMetadata?: {
+    id: string;
+    name: string;
+    category: string;
+    status: string;
+  };
 }
 
 export interface RoadmapDetails {

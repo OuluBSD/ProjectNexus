@@ -40,7 +40,17 @@ export class RoadmapSelectHandler implements CommandHandler {
       return {
         roadmap: {
           id: response.data.roadmap.id,
-          title: response.data.roadmap.title
+          title: response.data.roadmap.title,
+          selected: true,  // Mark as selected since this is the selected roadmap
+          status: response.data.roadmap.status,
+          progress: response.data.roadmap.progress,
+          projectRef: response.data.roadmap.projectRef,
+          projectMetadata: {
+            id: response.data.roadmap.projectRef,
+            name: "",
+            category: "",
+            status: ""
+          } // Simplified for consistency
         },
         context: {
           projectId: newContext.activeProjectId,

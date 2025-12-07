@@ -29,12 +29,30 @@ export class RoadmapListHandler implements CommandHandler {
       // Call API to get roadmaps for the project
       const response = await API_CLIENT.getRoadmaps(projectId);
 
+      // Get current context to determine selected roadmap
+      const contextManager = new ContextManager();
+      const currentContext = await contextManager.load();
+      const selectedRoadmapId = currentContext.activeRoadmapId;
+
       if (response.status === 'error') {
         throw new Error(`Failed to retrieve roadmaps: ${response.message}`);
       }
 
       // Filter roadmaps if filter flag is provided
       let roadmaps = response.data.roadmaps;
+
+      // Add selected flag and project metadata to each roadmap
+      roadmaps = roadmaps.map((roadmap: any) => ({
+        ...roadmap,
+        selected: roadmap.id === selectedRoadmapId,
+        projectMetadata: {
+          id: projectId,
+          name: currentContext.activeProjectName,
+          category: currentContext.activeProjectCategory,
+          status: currentContext.activeProjectStatus
+        }
+      }));
+
       if (filter) {
         roadmaps = roadmaps.filter((roadmap: any) =>
           roadmap.title.toLowerCase().includes(filter.toLowerCase()) ||

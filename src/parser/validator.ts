@@ -579,6 +579,32 @@ const COMMAND_SPECS: CommandSpec[] = [
     },
     contextRequired: []
   },
+  {
+    commandId: "network.health.stream",
+    namespace: "network",
+    segments: ["health", "stream"],
+    args: {},
+    flags: {},
+    contextRequired: []
+  },
+  {
+    commandId: "network.graph.stream",
+    namespace: "network",
+    segments: ["graph", "stream"],
+    args: {},
+    flags: {},
+    contextRequired: []
+  },
+  {
+    commandId: "network.element.monitor",
+    namespace: "network",
+    segments: ["element", "monitor"],
+    args: {},
+    flags: {
+      "id": { type: "string", required: true, description: "Element ID to monitor" }
+    },
+    contextRequired: []
+  },
   // Debug namespace commands
   {
     commandId: "debug.process.list",

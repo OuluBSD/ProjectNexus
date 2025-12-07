@@ -14,6 +14,10 @@ import { NetworkElementListHandler } from './element/list';
 import { NetworkElementViewHandler } from './element/view';
 import { NetworkStatusHandler } from './status';
 
+import { NetworkHealthStreamHandler } from './streaming/health-stream';
+import { NetworkGraphStreamHandler } from './streaming/graph-stream';
+import { NetworkElementMonitorHandler } from './streaming/element-monitor';
+
 export const networkCommands = {
   server: {
     list: new NetworkServerListHandler(),
@@ -30,6 +34,13 @@ export const networkCommands = {
   element: {
     list: new NetworkElementListHandler(),
     view: new NetworkElementViewHandler(),
+    monitor: new NetworkElementMonitorHandler()
+  },
+  health: {
+    stream: new NetworkHealthStreamHandler()
+  },
+  graph: {
+    stream: new NetworkGraphStreamHandler()
   }
 };
 

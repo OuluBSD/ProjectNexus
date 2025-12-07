@@ -16,6 +16,7 @@ export interface Config {
   autoOpenTerminal: boolean;
   detailMode: 'minimal' | 'expanded';
   rememberLastPath: boolean;
+  showBanner: boolean;
 }
 
 // Define all allowed configuration keys for validation
@@ -28,7 +29,8 @@ export const ALLOWED_CONFIG_KEYS: Array<keyof Config> = [
   'themeMode',
   'autoOpenTerminal',
   'detailMode',
-  'rememberLastPath'
+  'rememberLastPath',
+  'showBanner'
 ];
 
 // Get the configuration file path
@@ -48,7 +50,8 @@ export function getDefaultConfig(): Config {
     themeMode: 'auto',
     autoOpenTerminal: false,
     detailMode: 'expanded',
-    rememberLastPath: true
+    rememberLastPath: true,
+    showBanner: true
   };
 }
 

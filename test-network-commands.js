@@ -1,31 +1,68 @@
-// test-network-commands.js
-// Simple test script to verify network commands are properly registered
+// test-network-commands.js - Quick verification script
+const { Validator, validate } = require('./dist/parser/validator');
+const { CommandAST } = require('./dist/parser/grammar-parser');
 
-const { parseCommandLine } = require('./dist/parser');
-const { executeCommand } = require('./dist/runtime');
+// Test network health stream command
+const healthStreamAst = {
+  type: 'Command',
+  commandPath: ['network', 'health', 'stream'],
+  arguments: {
+    named: {},
+    positional: []
+  },
+  rawInput: 'network health stream'
+};
 
-async function testNetworkCommands() {
-  console.log('Testing Network Command Registration...');
-  
-  try {
-    // Test parsing of network element list command
-    const listCmd = parseCommandLine('network element list');
-    console.log('✓ network element list command parsed:', listCmd.commandId);
-    
-    // Test parsing of network element view command
-    const viewCmd = parseCommandLine('network element view --id element-1');
-    console.log('✓ network element view command parsed:', viewCmd.commandId);
-    
-    // Test parsing of network status command  
-    const statusCmd = parseCommandLine('network status');
-    console.log('✓ network status command parsed:', statusCmd.commandId);
-    
-    console.log('\nAll network commands are properly recognized by the parser!');
-    
-  } catch (error) {
-    console.error('✗ Error testing commands:', error.message);
+// Test network graph stream command
+const graphStreamAst = {
+  type: 'Command',
+  commandPath: ['network', 'graph', 'stream'],
+  arguments: {
+    named: {},
+    positional: []
+  },
+  rawInput: 'network graph stream'
+};
+
+// Test network element monitor command (with required id)
+const elementMonitorAst = {
+  type: 'Command',
+  commandPath: ['network', 'element', 'monitor'],
+  arguments: {
+    named: { id: 'element-123' },
+    positional: []
+  },
+  rawInput: 'network element monitor --id element-123'
+};
+
+// Test network element monitor command (without id - should fail)
+const elementMonitorInvalidAst = {
+  type: 'Command',
+  commandPath: ['network', 'element', 'monitor'],
+  arguments: {
+    named: {},
+    positional: []
+  },
+  rawInput: 'network element monitor'
+};
+
+console.log('Testing network streaming commands validation...\n');
+
+const tests = [
+  { name: 'network.health.stream', ast: healthStreamAst },
+  { name: 'network.graph.stream', ast: graphStreamAst },
+  { name: 'network.element.monitor (valid)', ast: elementMonitorAst },
+  { name: 'network.element.monitor (invalid)', ast: elementMonitorInvalidAst }
+];
+
+tests.forEach(test => {
+  const result = validate(test.ast);
+  console.log(`${test.name}: ${result.error ? 'FAILED' : 'PASSED'}`);
+  if (result.error) {
+    console.log(`  Error: ${result.message}`);
+  } else {
+    console.log(`  Command ID: ${result.commandId}`);
   }
-}
+});
 
-// Run the test
-testNetworkCommands();
+console.log('\nAll validation tests completed.');

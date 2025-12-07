@@ -5,6 +5,25 @@ import { ValidatedCommand } from '../parser/index';
 import { ExecutionContext, ContextState, CommandResult, CommandError } from './types';
 import { handlerRegistry } from './handler-registry';
 import { ContextManager } from '../state/context-manager';
+import { wrapAsyncGenerator } from '../observability/uol';
+import { attachHintToError } from '../utils/hints';
+import { formatStreamingEvent } from '../utils/formatters';
+
+// Helper function to map context types to error types for hints
+function getErrorTypeForContext(contextType: string): string {
+  switch(contextType) {
+    case 'activeProject':
+      return 'MISSING_PROJECT_CONTEXT';
+    case 'activeRoadmap':
+      return 'MISSING_ROADMAP_CONTEXT';
+    case 'activeChat':
+      return 'MISSING_CHAT_CONTEXT';
+    case 'activeAiSession':
+      return 'MISSING_AI_SESSION_CONTEXT';
+    default:
+      return 'MISSING_REQUIRED_CONTEXT';
+  }
+}
 
 export class RuntimeEngine {
   async executeCommand(validated: ValidatedCommand): Promise<CommandResult> {
@@ -12,13 +31,14 @@ export class RuntimeEngine {
     const handler = handlerRegistry.findHandler(validated.commandId);
 
     if (!handler) {
+      const errorMessage = `No handler found for command: ${validated.commandId}`;
       return {
         status: 'error',
         data: null,
-        message: `No handler found for command: ${validated.commandId}`,
+        message: attachHintToError('HANDLER_NOT_FOUND', errorMessage),
         errors: [{
           type: 'HANDLER_NOT_FOUND',
-          message: `Command handler not implemented: ${validated.commandId}`
+          message: attachHintToError('HANDLER_NOT_FOUND', `Command handler not implemented: ${validated.commandId}`)
         } as CommandError]
       };
     }
@@ -53,13 +73,16 @@ export class RuntimeEngine {
         }
 
         if (!hasContext) {
+          const errorType = getErrorTypeForContext(requiredContext);
+          const errorMessage = `Missing required context: ${requiredContext}. Please set the required context before running this command.`;
+
           return {
             status: 'error',
             data: null,
-            message: `Missing required context: ${requiredContext}. Please set the required context before running this command.`,
+            message: attachHintToError(errorType, errorMessage),
             errors: [{
               type: 'MISSING_REQUIRED_CONTEXT',
-              message: `Command ${validated.commandId} requires ${requiredContext} context`,
+              message: attachHintToError(errorType, `Command ${validated.commandId} requires ${requiredContext} context`),
               details: { requiredContext, commandId: validated.commandId }
             } as CommandError]
           };
@@ -77,26 +100,74 @@ export class RuntimeEngine {
     };
 
     try {
+      // Set up signal handling for interruption
+      let interrupted = false;
+      const signalHandler = () => {
+        interrupted = true;
+      };
+
+      process.on('SIGINT', signalHandler);
+      process.on('SIGTERM', signalHandler);
+
       // Execute the command through the handler, but don't await yet
       const executionResult = (handler.execute(context) as any);
 
       // Check if the result is an AsyncGenerator (streaming)
       if (executionResult && typeof executionResult === 'object' && executionResult[Symbol.asyncIterator]) {
-        // Handle streaming generator
-        for await (const event of executionResult) {
-          // Print each event as a JSON line for streaming
-          console.log(JSON.stringify(event));
+        // Determine the source based on the command ID
+        let source: "ai" | "process" | "websocket" | "poll" | "network" = "ai"; // default
+
+        if (validated.commandId.includes("debug:process")) {
+          source = "process";
+        } else if (validated.commandId.includes("debug:websocket")) {
+          source = "websocket";
+        } else if (validated.commandId.includes("debug:poll")) {
+          source = "poll";
+        } else if (validated.commandId.includes("ai:message")) {
+          source = "ai";
+        } else if (validated.commandId.includes("network")) {
+          source = "network";
         }
+
+        // Handle streaming generator - wrap in standardized observability events
+        try {
+          const generator = wrapAsyncGenerator(source, executionResult);
+          for await (const event of generator) {
+            // Check if we've received an interruption signal
+            if (interrupted) {
+              // Emit an interrupt event
+              const interruptEvent = {
+                seq: event.seq + 1, // Use next sequence number
+                timestamp: new Date().toISOString(),
+                source,
+                event: 'interrupt',
+                message: 'Stream interrupted by user'
+              };
+              console.log(formatStreamingEvent(source, interruptEvent.seq, interruptEvent));
+              break;
+            }
+            // Print each event as a formatted line for streaming
+            console.log(formatStreamingEvent(source, event.seq, event));
+          }
+        } finally {
+          // Clean up signal handlers
+          process.removeListener('SIGINT', signalHandler);
+          process.removeListener('SIGTERM', signalHandler);
+        }
+
         // Return a final success result after streaming completes
         return {
           status: 'ok',
-          data: null,
+          data: { stream: "completed" },
           message: `Command ${validated.commandId} executed successfully`,
           errors: []
         };
       } else {
         // Handle regular (non-streaming) result - it might be a promise
         const resolvedResult = await executionResult;
+        // Clean up signal handlers
+        process.removeListener('SIGINT', signalHandler);
+        process.removeListener('SIGTERM', signalHandler);
         return {
           status: 'ok',
           data: resolvedResult,
@@ -106,13 +177,14 @@ export class RuntimeEngine {
       }
     } catch (error: any) {
       // Handle any execution errors
+      const errorMessage = `Execution error for command ${validated.commandId}: ${error.message}`;
       return {
         status: 'error',
         data: null,
-        message: `Execution error for command ${validated.commandId}: ${error.message}`,
+        message: attachHintToError('EXECUTION_ERROR', errorMessage),
         errors: [{
           type: 'EXECUTION_ERROR',
-          message: error.message
+          message: attachHintToError('EXECUTION_ERROR', error.message)
         } as CommandError]
       };
     }

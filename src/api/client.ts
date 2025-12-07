@@ -864,6 +864,141 @@ export class APIClient {
       yield event;
     }
   }
+
+  async *streamNetworkHealth(): AsyncGenerator<RawNetworkEvent> {
+    // Mock implementation - in a real implementation, this would connect to a streaming endpoint
+    // For this mock implementation, we'll generate fake network health events
+
+    const statuses = ['online', 'degraded', 'offline'];
+    const events: RawNetworkEvent[] = [
+      { event: 'status', data: { cpu: 45, mem: 62, latency: 25, status: 'online', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { cpu: 52, mem: 68, latency: 27, rxBytes: 120567, txBytes: 98432, timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { cpu: 48, mem: 71, latency: 23, rxBytes: 125678, txBytes: 102345, timestamp: new Date().toISOString() } },
+      { event: 'status', data: { cpu: 55, mem: 74, latency: 30, status: 'degraded', timestamp: new Date().toISOString() } },
+      { event: 'error', data: { error: 'High latency detected', code: 'HIGH_LATENCY', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { cpu: 60, mem: 78, latency: 35, rxBytes: 130789, txBytes: 108456, timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { cpu: 57, mem: 75, latency: 32, rxBytes: 135890, txBytes: 112567, timestamp: new Date().toISOString() } },
+      { event: 'status', data: { cpu: 42, mem: 68, latency: 18, status: 'online', timestamp: new Date().toISOString() } },
+      { event: 'status', data: { message: 'Network is operating normally', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { cpu: 38, mem: 65, latency: 15, rxBytes: 140901, txBytes: 118678, timestamp: new Date().toISOString() } },
+      { event: 'end', data: { message: 'Stream completed', timestamp: new Date().toISOString() } }
+    ];
+
+    for (const event of events) {
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50)); // Random delay between 50-150ms
+      yield event;
+    }
+  }
+
+  async *streamNetworkGraph(): AsyncGenerator<RawGraphEvent> {
+    // Mock implementation - in a real implementation, this would connect to a streaming endpoint
+    // For this mock implementation, we'll generate fake network graph events
+
+    const updateGraphEvent = (nodes: Node[], edges: Edge[]): RawGraphEvent => ({
+      event: 'graph-update',
+      data: { nodes, edges }
+    });
+
+    const nodes: Node[] = [
+      { id: 'server-1', type: 'server', status: 'online' },
+      { id: 'server-2', type: 'server', status: 'online' },
+      { id: 'connection-1', type: 'connection', status: 'active' },
+      { id: 'process-1', type: 'process', status: 'running' }
+    ];
+
+    const edges: Edge[] = [
+      { from: 'server-1', to: 'connection-1', latency: 12 },
+      { from: 'server-2', to: 'connection-1', latency: 15 },
+      { from: 'process-1', to: 'server-1', latency: 8 }
+    ];
+
+    const events: RawGraphEvent[] = [
+      updateGraphEvent(nodes, edges),
+      updateGraphEvent(
+        [...nodes, { id: 'new-server', type: 'server', status: 'starting' }],
+        [
+          ...edges,
+          { from: 'new-server', to: 'connection-1', latency: 20 }
+        ]
+      ),
+      updateGraphEvent(
+        nodes.map(n => n.id === 'new-server' ? { ...n, status: 'online' } : n),
+        edges
+      ),
+      updateGraphEvent(
+        nodes.map(n => n.id === 'server-1' ? { ...n, status: 'degraded' } : n),
+        edges
+      ),
+      updateGraphEvent(
+        nodes.map(n => n.id === 'server-1' ? { ...n, status: 'online' } : n),
+        edges
+      ),
+      updateGraphEvent(
+        nodes.filter(n => n.id !== 'new-server'),
+        edges.filter(e => e.from !== 'new-server' && e.to !== 'new-server')
+      ),
+      updateGraphEvent(nodes, edges),
+      { event: 'graph-update', data: { nodes, edges } },
+      { event: 'end', data: { nodes: [], edges: [], message: 'Graph stream completed', timestamp: new Date().toISOString() } }
+    ];
+
+    for (const event of events) {
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 150 + 100)); // Random delay between 100-250ms
+      yield event;
+    }
+  }
+
+  async *streamNetworkElementHealth(elementId: string): AsyncGenerator<RawNetworkEvent> {
+    // Mock implementation - in a real implementation, this would connect to a streaming endpoint
+    // For this mock implementation, we'll generate fake network element health events
+
+    const events: RawNetworkEvent[] = [
+      { event: 'status', data: { elementId, status: 'online', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { elementId, cpu: 30, mem: 45, timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { elementId, cpu: 35, mem: 50, timestamp: new Date().toISOString() } },
+      { event: 'status', data: { elementId, status: 'warning', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { elementId, cpu: 85, mem: 92, timestamp: new Date().toISOString() } },
+      { event: 'error', data: { elementId, error: 'High CPU usage', code: 'HIGH_CPU', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { elementId, cpu: 80, mem: 88, timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { elementId, cpu: 75, mem: 85, timestamp: new Date().toISOString() } },
+      { event: 'status', data: { elementId, status: 'online', timestamp: new Date().toISOString() } },
+      { event: 'metric', data: { elementId, cpu: 40, mem: 55, timestamp: new Date().toISOString() } },
+      { event: 'end', data: { elementId, message: 'Element monitoring completed', timestamp: new Date().toISOString() } }
+    ];
+
+    for (const event of events) {
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 75)); // Random delay between 75-175ms
+      yield event;
+    }
+  }
 }
+
+// Define the types for network streaming events
+type RawNetworkEvent = {
+  event: 'status' | 'metric' | 'error' | 'end';
+  data: {
+    [key: string]: any;
+  };
+};
+
+type RawGraphEvent = {
+  event: 'graph-update' | 'end';
+  data: {
+    nodes: Node[];
+    edges: Edge[];
+  } & Record<string, any>; // Allow additional properties
+};
+
+type Node = {
+  id: string;
+  type: string;
+  status: string;
+};
+
+type Edge = {
+  from: string;
+  to: string;
+  latency?: number;
+};
 
 export const API_CLIENT = new APIClient();

@@ -3,7 +3,7 @@
 
 import { CommandHandler } from '../../runtime/handler-registry';
 import { ExecutionContext } from '../../runtime/types';
-import { checkParity } from '../../../tools/parity-check';
+import { checkParity } from '../../utils/parity-check';
 
 export class SystemParityHandler implements CommandHandler {
   async execute(context: ExecutionContext): Promise<any> {

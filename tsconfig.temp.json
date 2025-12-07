@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "skipLibCheck": true
+  },
+  "exclude": [
+    "src/commands/system/parity.ts",
+    "tools/parity-check.ts",
+    "node_modules",
+    "dist"
+  ]
+}

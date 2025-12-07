@@ -4,7 +4,7 @@
 import { ExecutionContext } from './types';
 
 export interface CommandHandler {
-  execute(context: ExecutionContext): Promise<any>;
+  execute(context: ExecutionContext): Promise<any> | AsyncGenerator<any>;
 }
 
 // Define a map to store command handlers by commandId

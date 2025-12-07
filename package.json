@@ -12,7 +12,14 @@
     "dev": "tsx watch src/main.ts",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
-    "build": "tsc"
+    "build": "tsc",
+    "build:dist": "node --loader ts-node/esm tools/build.ts",
+    "release": "npm run test && npm run build:dist",
+    "generate:man": "node --loader ts-node/esm tools/generate-man-pages.ts",
+    "quality": "node --loader ts-node/esm tools/quality-check.ts",
+    "release:run": "node --loader ts-node/esm tools/release.ts",
+    "rc1": "npm run build:dist && node --loader ts-node/esm tools/rc1-certify.ts",
+    "ga": "npm run build:dist && ts-node tools/ga-audit.ts"
   },
   "keywords": [
     "nexus",
@@ -23,6 +30,7 @@
   "author": "Nexus Team",
   "license": "MIT",
   "dependencies": {
+    "chalk": "^5.3.0",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0",
     "uuid": "^10.0.0"
@@ -31,6 +39,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^18.0.0",
     "jest": "^29.0.0",
+    "pkg": "^5.8.1",
     "ts-jest": "^29.4.6",
     "tsx": "^3.12.0"
   }

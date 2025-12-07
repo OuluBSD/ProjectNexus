@@ -52,7 +52,11 @@ import { DebugPollViewHandler } from './debug/poll/view';
 import { DebugPollStreamHandler } from './debug/poll/stream';
 
 // System commands
+import { SystemHelpHandler } from './system/help';
+import { SystemVersionHandler } from './system/version';
 import { SystemParityHandler } from './system/parity';
+import { SystemCompletionHandler } from './system/completion';
+import { SystemDoctorHandler } from './system/doctor';
 
 // Register all command handlers
 export function registerCommandHandlers(): void {
@@ -115,6 +119,10 @@ export function registerCommandHandlers(): void {
 
   // System commands
   handlerRegistry.register('system.parity', new SystemParityHandler());
+  handlerRegistry.register('system.help', new SystemHelpHandler());
+  handlerRegistry.register('system.version', new SystemVersionHandler());
+  handlerRegistry.register('system.completion', new SystemCompletionHandler());
+  handlerRegistry.register('system.doctor', new SystemDoctorHandler());
 
   // Add more handlers as they are implemented
 }

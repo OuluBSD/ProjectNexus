@@ -2,11 +2,13 @@
   "name": "guess-the-number-game",
   "version": "1.0.0",
   "description": "A simple console game where players guess a randomly generated number",
-  "main": "guess-the-number-game.ts",
+  "main": "dist/guess-the-number-game.js",
   "scripts": {
-    "start": "tsx guess-the-number-game.ts",
-    "dev": "tsx watch guess-the-number-game.ts",
-    "test": "tsx test/guess-the-number.test.ts"
+    "start": "tsx src/guess-the-number-game.ts",
+    "dev": "tsx watch src/guess-the-number-game.ts",
+    "build": "tsc",
+    "test": "tsx test/guess-the-number.test.ts",
+    "ci": "npm run build && npm run test"
   },
   "keywords": [
     "game",
@@ -20,6 +22,7 @@
     "tsx": "^4.7.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.10.0",
+    "typescript": "^5.0.0"
   }
 }

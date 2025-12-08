@@ -1,6 +1,7 @@
 // src/main.ts
 // Main entry point for the Nexus CLI
 
+import { fileURLToPath } from 'url';
 import { parseCommandLine } from './parser';
 import { executeCommand } from './runtime';
 import { formatOutput } from './utils/formatters';
@@ -103,6 +104,8 @@ async function main(): Promise<void> {
   }
 }
 
-if (require.main === module) {
+// Check if this is the main module in ESM
+const __filename = fileURLToPath(import.meta.url);
+if (import.meta.url === `file://${__filename}`) {
   main();
 }

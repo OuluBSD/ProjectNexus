@@ -24,7 +24,8 @@
     "noImplicitOverride": true,
     "useUnknownInCatchVariables": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": true
   },
   "include": [
     "src/**/*",

@@ -1,31 +1,96 @@
 // Simple tests for the GuessTheNumberGame class
 // Note: These are conceptual tests since the game uses readline and is interactive
 
-import { GuessTheNumberGame } from './src/guess-the-number-game';
+import { GuessTheNumberGame } from '../dist/guess-the-number-game';
 
-// Mock readline for testing purposes
-jest.mock('readline');
+// Simple test to check if the class can be instantiated and works correctly
+function testGameInitialization() {
+  console.log("Running test: Game initialization with custom parameters...");
 
-describe('GuessTheNumberGame', () => {
-  let game: GuessTheNumberGame;
+  try {
+    const game = new GuessTheNumberGame(1, 10, 5);
+    // Access private properties through type assertion
+    const minRange = (game as any).minRange;
+    const maxRange = (game as any).maxRange;
+    const maxAttempts = (game as any).maxAttempts;
 
-  beforeEach(() => {
-    // Create a new game instance for each test
-    // For now, this is just a high-level test as the actual implementation 
-    // uses readline which makes unit testing more complex
-    game = new GuessTheNumberGame(1, 10, 5);
-  });
+    if (minRange !== 1 || maxRange !== 10 || maxAttempts !== 5) {
+      throw new Error(`Properties not set correctly: minRange=${minRange}, maxRange=${maxRange}, maxAttempts=${maxAttempts}`);
+    }
 
-  test('should generate a random number within the specified range', () => {
-    const secretNumber = (game as any).secretNumber; // Access private property for testing
-    expect(secretNumber).toBeGreaterThanOrEqual(1);
-    expect(secretNumber).toBeLessThanOrEqual(10);
-  });
+    console.log("✅ Game initialization test passed!");
+    return true;
+  } catch (error) {
+    console.log("❌ Game initialization test failed:", error);
+    return false;
+  }
+}
 
-  test('should initialize with default values when no parameters provided', () => {
-    const defaultGame = new GuessTheNumberGame();
-    expect((defaultGame as any).minRange).toBe(1);
-    expect((defaultGame as any).maxRange).toBe(100);
-    expect((defaultGame as any).maxAttempts).toBe(7);
-  });
-});
+function testGameDefaultInitialization() {
+  console.log("Running test: Game initialization with default parameters...");
+
+  try {
+    const game = new GuessTheNumberGame();
+    const minRange = (game as any).minRange;
+    const maxRange = (game as any).maxRange;
+    const maxAttempts = (game as any).maxAttempts;
+
+    if (minRange !== 1 || maxRange !== 100 || maxAttempts !== 7) {
+      throw new Error(`Default properties not set correctly: minRange=${minRange}, maxRange=${maxRange}, maxAttempts=${maxAttempts}`);
+    }
+
+    console.log("✅ Default initialization test passed!");
+    return true;
+  } catch (error) {
+    console.log("❌ Default initialization test failed:", error);
+    return false;
+  }
+}
+
+function testRandomNumberGeneration() {
+  console.log("Running test: Random number generation...");
+
+  try {
+    const game = new GuessTheNumberGame(1, 10, 5);
+    const secretNumber = (game as any).secretNumber;
+
+    if (secretNumber < 1 || secretNumber > 10) {
+      throw new Error(`Generated number not in range: ${secretNumber}`);
+    }
+
+    console.log("✅ Random number generation test passed!");
+    return true;
+  } catch (error) {
+    console.log("❌ Random number generation test failed:", error);
+    return false;
+  }
+}
+
+// Run all tests
+function runTests() {
+  console.log("🧪 Starting tests for GuessTheNumberGame...\n");
+
+  const results = [
+    testGameInitialization(),
+    testGameDefaultInitialization(),
+    testRandomNumberGeneration()
+  ];
+
+  const passedCount = results.filter(Boolean).length;
+  const totalCount = results.length;
+
+  console.log(`\n📊 Test Results: ${passedCount}/${totalCount} tests passed`);
+
+  if (passedCount === totalCount) {
+    console.log("🎉 All tests passed!");
+    process.exit(0);
+  } else {
+    console.log("💥 Some tests failed!");
+    process.exit(1);
+  }
+}
+
+// Run the tests when this file is executed
+if (require.main === module) {
+  runTests();
+}

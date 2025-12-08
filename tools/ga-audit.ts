@@ -667,6 +667,11 @@ export const runGAAudit = async (): Promise<AuditResult> => {
 export default runGAAudit;
 
 // Run the audit if this script is executed directly
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+
 if (import.meta.url === `file://${__filename}`) {
   (async () => {
     try {
@@ -685,5 +690,3 @@ if (import.meta.url === `file://${__filename}`) {
     }
   })();
 }
-
-const __filename = new URL(import.meta.url).pathname;

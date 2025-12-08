@@ -980,6 +980,51 @@ const COMMAND_SPECS: CommandSpec[] = [
     args: {},
     flags: {},
     contextRequired: []
+  },
+  // System namespace commands
+  {
+    commandId: "system.help",
+    namespace: "system",
+    segments: ["help"],
+    args: {},
+    flags: {
+      "command": { type: "string", required: false, description: "Show help for specific command" }
+    },
+    contextRequired: []
+  },
+  {
+    commandId: "system.version",
+    namespace: "system",
+    segments: ["version"],
+    args: {},
+    flags: {},
+    contextRequired: []
+  },
+  {
+    commandId: "system.parity",
+    namespace: "system",
+    segments: ["parity"],
+    args: {},
+    flags: {},
+    contextRequired: []
+  },
+  {
+    commandId: "system.completion",
+    namespace: "system",
+    segments: ["completion"],
+    args: {
+      "shell": { type: "string", required: true, description: "Shell type (bash, zsh, fish)" }
+    },
+    flags: {},
+    contextRequired: []
+  },
+  {
+    commandId: "system.doctor",
+    namespace: "system",
+    segments: ["doctor"],
+    args: {},
+    flags: {},
+    contextRequired: []
   }
 ];
 

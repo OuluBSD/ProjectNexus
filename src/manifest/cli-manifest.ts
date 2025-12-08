@@ -406,5 +406,54 @@ export const CLI_MANIFEST: CLICommandEntry[] = [
     flags: [],
     contextRequired: [],
     streaming: true
+  },
+
+  // System commands
+  {
+    id: 'system.help',
+    path: ['system', 'help'],
+    description: 'Show help information',
+    args: [],
+    flags: [
+      { name: 'command', required: false, type: 'string' }
+    ],
+    contextRequired: [],
+    streaming: false
+  },
+  {
+    id: 'system.version',
+    path: ['system', 'version'],
+    description: 'Show CLI version information',
+    args: [],
+    flags: [],
+    contextRequired: [],
+    streaming: false
+  },
+  {
+    id: 'system.parity',
+    path: ['system', 'parity'],
+    description: 'Check CLI vs UI command parity',
+    args: [],
+    flags: [],
+    contextRequired: [],
+    streaming: false
+  },
+  {
+    id: 'system.completion',
+    path: ['system', 'completion'],
+    description: 'Generate shell completion scripts',
+    args: [{ name: 'shell', required: true }],
+    flags: [],
+    contextRequired: [],
+    streaming: false
+  },
+  {
+    id: 'system.doctor',
+    path: ['system', 'doctor'],
+    description: 'Diagnose system configuration',
+    args: [],
+    flags: [],
+    contextRequired: [],
+    streaming: false
   }
 ];

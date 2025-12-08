@@ -1,0 +1,87 @@
+diff --git a/package.json b/package.json
+index 5b8e2a9..1c5f3d2 100644
+--- a/package.json
++++ b/package.json
+@@ -13,15 +13,15 @@
+   "scripts": {
+     "start": "tsx src/main.ts",
+     "dev": "tsx watch src/main.ts",
+-    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+-    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+-    "build": "tsc",
++    "test": "node --loader ts-node/esm node_modules/.bin/jest",
++    "test:watch": "node --loader ts-node/esm node_modules/.bin/jest --watch",
++    "build": "tsc --module esnext --outDir dist",
+     "build:dist": "tsx tools/build.ts",
+     "release": "npm run test && npm run build:dist",
+     "generate:man": "tsx tools/generate-man-pages.ts",
+     "quality": "tsx tools/quality-check.ts",
+-    "release:run": "tsx tools/release.ts",
++    "release:run": "node --loader tsx/esm tools/release.ts",
+     "rc1": "npm run build:dist && tsx tools/rc1-certify.ts",
+     "ga": "npm run build:dist && tsx tools/ga-audit.ts"
+   },
+diff --git a/tools/release.ts b/tools/release.ts
+index 2d4a1c3..8b1e5f2 100644
+--- a/tools/release.ts
++++ b/tools/release.ts
+@@ -10,7 +10,7 @@ import { generateReleaseNotes } from './changelog';
+ 
+ // Run quality gates
+ function runQualityGates(): boolean {
+   try {
+-    execSync('ts-node tools/quality-check.ts', { stdio: 'inherit' });
++    execSync('tsx tools/quality-check.ts', { stdio: 'inherit' });
+     return true;
+   } catch (error) {
+     console.error('Quality gates failed:', error);
+@@ -45,7 +45,7 @@ function bumpVersion(releaseType: 'major' | 'minor' | 'patch'): string {
+     execSync(`ts-node tools/bump-version.ts --${releaseType}`, { stdio: 'inherit' });
+ 
+     // Get the new version from package.json
+     const packageJsonPath = path.join(process.cwd(), 'package.json');
+-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
++    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+   }
+   catch (error) {
+     console.error('Error bumping version:', error);
+@@ -116,7 +116,7 @@ function runRelease(): void {
+ 
+   // 5. Generate changelog
+   console.log('5. Generating changelog...');
+   try {
+-    execSync('ts-node tools/changelog.ts', { stdio: 'inherit' });
++    execSync('tsx tools/changelog.ts', { stdio: 'inherit' });
+     console.log('✅ Changelog generated\n');
+   } catch (error) {
+     console.error('❌ Error generating changelog:', error);
+diff --git a/tools/quality-check.ts b/tools/quality-check.ts
+index 9d3c12f..c8f2e4a 100644
+--- a/tools/quality-check.ts
++++ b/tools/quality-check.ts
+@@ -1,5 +1,3 @@
+-#!/usr/bin/env ts-node
+-
+ import fs from 'fs';
+ import path from 'path';
+ import { execSync } from 'child_process';
+diff --git a/tsconfig.tools.json b/tsconfig.tools.json
+new file mode 100644
+index 0000000..7e8f9a2
+--- /dev/null
++++ b/tsconfig.tools.json
+@@ -0,0 +1,13 @@
++{
++  "extends": "./tsconfig.json",
++  "compilerOptions": {
++    "module": "ESNext",
++    "moduleResolution": "node",
++    "outDir": "./dist-tools"
++  },
++  "include": [
++    "tools/**/*"
++  ],
++  "exclude": [
++    "node_modules", "dist", "dist-tools"
++  ]
++}

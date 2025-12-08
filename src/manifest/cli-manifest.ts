@@ -81,6 +81,15 @@ export const CLI_MANIFEST: CLICommandEntry[] = [
     contextRequired: ['project'],
     streaming: false
   },
+  {
+    id: 'agent.roadmap.current',
+    path: ['agent', 'roadmap', 'current'],
+    description: 'Show the currently selected roadmap',
+    args: [],
+    flags: [],
+    contextRequired: ['project'],
+    streaming: false
+  },
 
   // Agent chat commands
   {
@@ -106,6 +115,15 @@ export const CLI_MANIFEST: CLICommandEntry[] = [
     path: ['agent', 'chat', 'select'],
     description: 'Select a chat as the current context',
     args: [{ name: 'chatId', required: true }],
+    flags: [],
+    contextRequired: ['project', 'roadmap'],
+    streaming: false
+  },
+  {
+    id: 'agent.chat.current',
+    path: ['agent', 'chat', 'current'],
+    description: 'Show the currently selected chat',
+    args: [],
     flags: [],
     contextRequired: ['project', 'roadmap'],
     streaming: false

@@ -1,0 +1,96 @@
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 3006448..29c0549 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -114,6 +114,7 @@ export interface GetRoadmapResponse {
+ // Chat types
+ export interface ChatSummary {
+   id: string;
++  selected?: boolean;  // Indicates if this chat is currently selected
+   title: string;
+   status: string;
+   progress: number;
+@@ -122,6 +123,12 @@ export interface ChatSummary {
+   note: string;
+   meta: boolean;
+   roadmapRef?: string;  // Reference to the roadmap it belongs to
++  roadmapMetadata?: {
++    id: string;
++    title: string;
++    status: string;
++    progress: number;
++  };
+ }
+
+ export interface ChatDetails {
+diff --git a/src/commands/agent/chat/list.ts b/src/commands/agent/chat/list.ts
+index 7a169b8..3b6a7f7 100644
+--- a/src/commands/agent/chat/list.ts
++++ b/src/commands/agent/chat/list.ts
+@@ -12,6 +12,14 @@ export class ChatListHandler implements CommandHandler {
+       // Get roadmap ID from either explicit flag or current context
+       let roadmapId = explicitRoadmapId;
+       if (!roadmapId) {
+         // Get the context manager and verify roadmap context exists
+         const contextManager = new ContextManager();
+         const currentContext = await contextManager.load();
+
+         if (!currentContext.activeRoadmapId) {
+           throw new Error('No active roadmap selected. Use --roadmap-id or select a roadmap first.');
+         }
+
+         roadmapId = currentContext.activeRoadmapId;
+       }
+
+       // Get current context to determine selected chat
+       const contextManager = new ContextManager();
+       const currentContext = await contextManager.load();
+       const selectedChatId = currentContext.activeChatId;
+
+       // Call API to get chats for the roadmap
+       const response = await API_CLIENT.getChats(roadmapId);
+
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve chats: ${response.message}`);
+       }
+
+       // Add selected flag to each chat
+       const chats = response.data.chats.map((chat: any) => ({
+         ...chat,
+         selected: chat.id === selectedChatId
+       }));
+
+       return {
+         chats
+       };
+     } catch (error) {
+       throw new Error(`Failed to list chats: ${(error as Error).message}`);
+     }
+   }
+ }
+diff --git a/src/commands/agent/chat/select.ts b/src/commands/agent/chat/select.ts
+index 69ed29b..72373c1 100644
+--- a/src/commands/agent/chat/select.ts
++++ b/src/commands/agent/chat/select.ts
+@@ -40,7 +40,13 @@ export class ChatSelectHandler implements CommandHandler {
+       return {
+         chat: {
+           id: response.data.chat.id,
+-          title: response.data.chat.title
++          title: response.data.chat.title,
++          selected: true,  // Mark as selected since this is the selected chat
++          status: response.data.chat.status,
++          progress: response.data.chat.progress,
++          roadmapRef: response.data.chat.roadmapRef,
++          note: response.data.chat.note,
++          meta: response.data.chat.meta
+         },
+         context: {
+           projectId: newContext.activeProjectId,
+          projectName: newContext.activeProjectName,
+          roadmapId: newContext.activeRoadmapId,
+          roadmapTitle: newContext.activeRoadmapTitle,
+          chatId: newContext.activeChatId,
+          chatTitle: newContext.activeChatTitle
+        }
+      };

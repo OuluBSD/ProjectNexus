@@ -81,7 +81,7 @@ export class RuntimeEngine {
             data: null,
             message: attachHintToError(errorType, errorMessage),
             errors: [{
-              type: 'MISSING_REQUIRED_CONTEXT',
+              type: errorType,
               message: attachHintToError(errorType, `Command ${validated.commandId} requires ${requiredContext} context`),
               details: { requiredContext, commandId: validated.commandId }
             } as CommandError]
@@ -131,7 +131,25 @@ export class RuntimeEngine {
 
         // Handle streaming generator - wrap in standardized observability events
         try {
-          const generator = wrapAsyncGenerator(source, executionResult);
+          // Determine stream kind and sourceId based on the command
+          let streamKind = `${source}-stream`;
+          let sourceId: string | undefined;
+
+          // Extract potential sourceId from the command arguments/flags
+          if (source === 'process' && context.flags && context.flags.id) {
+            sourceId = context.flags.id as string;
+            streamKind = 'process-logs';
+          } else if (source === 'network') {
+            streamKind = 'network-health';
+          } else if (source === 'websocket' && context.flags && context.flags.id) {
+            sourceId = context.flags.id as string;
+            streamKind = 'websocket-frames';
+          } else if (source === 'poll' && context.flags && context.flags.id) {
+            sourceId = context.flags.id as string;
+            streamKind = 'poll-events';
+          }
+
+          const generator = wrapAsyncGenerator(source, executionResult, undefined, sourceId, streamKind);
           for await (const event of generator) {
             // Check if we've received an interruption signal
             if (interrupted) {

@@ -14,7 +14,7 @@ export class DebugPollViewHandler {
         status: 'error',
         data: null,
         message: 'Missing required flag: --id',
-        errors: [{ code: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
+        errors: [{ type: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
       };
     }
 
@@ -37,7 +37,7 @@ export class DebugPollViewHandler {
             status: 'error',
             data: null,
             message: `Poll session with id ${id} not found`,
-            errors: [{ code: 'NOT_FOUND', id }]
+            errors: [{ type: 'NOT_FOUND', message: `Poll session with id ${id} not found`, details: { id } }]
           };
         } else {
           // Return other errors as they are
@@ -45,7 +45,11 @@ export class DebugPollViewHandler {
             status: 'error',
             data: null,
             message: response.message,
-            errors: response.errors
+            errors: response.errors.map((err: any) => ({
+              type: err.code || 'API_ERROR',
+              message: err.message || err,
+              details: err.details || {}
+            }))
           };
         }
       }
@@ -54,7 +58,7 @@ export class DebugPollViewHandler {
         status: 'error',
         data: null,
         message: `Failed to retrieve poll session with id ${id}`,
-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
       };
     }
   }
@@ -64,23 +68,23 @@ export class DebugPollViewHandler {
     if (!args.flags || !args.flags.id) {
       return {
         error: true,
-        code: 'MISSING_REQUIRED_FLAG',
+        type: 'MISSING_REQUIRED_FLAG',
         message: 'Missing required flag: --id',
         details: {
           command: 'debug.poll.view'
         }
       };
     }
-    
+
     // Validate flags
     const validFlags = ['id'];
     const providedFlags = Object.keys(args.flags || {});
-    
+
     for (const flag of providedFlags) {
       if (!validFlags.includes(flag)) {
         return {
           error: true,
-          code: 'UNKNOWN_FLAG',
+          type: 'UNKNOWN_FLAG',
           message: `Unknown flag: --${flag}`,
           details: {
             command: 'debug.poll.view',

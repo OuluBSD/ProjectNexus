@@ -41,7 +41,9 @@ async function build() {
     version: packageJson.version,
     gitHash,
     buildDate: new Date().toISOString(),
-    platform: process.platform
+    platform: process.platform,
+    minimumBackendVersion: packageJson.minimumBackendVersion || '1.0.0',
+    recommendedBackendVersion: packageJson.recommendedBackendVersion || '1.0.0'
   };
   
   const buildInfoPath = join(process.cwd(), 'src', 'generated', 'build-info.ts');

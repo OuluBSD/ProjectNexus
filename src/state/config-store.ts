@@ -79,6 +79,20 @@ export async function loadConfig(): Promise<Config> {
       const defaultConfig = getDefaultConfig();
       await saveConfig(defaultConfig);
       return defaultConfig;
+    } else if (error instanceof SyntaxError) {
+      // JSON parsing error - config file is corrupted
+      console.error(`Config file corrupted: ${error.message}`);
+      // Return default config but log the issue
+      const defaultConfig = getDefaultConfig();
+      // Try to backup the corrupted config
+      try {
+        const backupPath = configPath + '.backup';
+        await fs.copyFile(configPath, backupPath);
+        console.error(`Corrupted config backed up to: ${backupPath}`);
+      } catch (backupError) {
+        console.error(`Failed to backup corrupted config: ${backupError.message}`);
+      }
+      return defaultConfig;
     } else {
       // Other error occurred, log and return defaults
       console.error(`Error reading config file: ${error.message}`);

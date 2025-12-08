@@ -46,7 +46,28 @@ function loadConfigSync(): any {
 
     if (fs.existsSync(configPath)) {
       const configContent = fs.readFileSync(configPath, 'utf-8');
-      return JSON.parse(configContent);
+      try {
+        return JSON.parse(configContent);
+      } catch (parseError) {
+        // Log the parsing error for debugging
+        console.error(`Config file corrupted: ${parseError.message}`);
+        console.error(`Config path: ${configPath}`);
+
+        // Try to backup the corrupted config
+        try {
+          const backupPath = configPath + '.backup';
+          fs.copyFileSync(configPath, backupPath);
+          console.error(`Corrupted config backed up to: ${backupPath}`);
+        } catch (backupError) {
+          console.error(`Failed to backup corrupted config: ${backupError.message}`);
+        }
+
+        // Return default config
+        return {
+          outputMode: 'pretty',
+          showBanner: true
+        };
+      }
     } else {
       // Return default config if file doesn't exist
       return {
@@ -136,14 +157,32 @@ export function formatStreamingEvent(source: string, seq: number, event: any): s
 
   if (config.outputMode === 'pretty') {
     const paddedSeq = seq.toString().padStart(3, '0');
-    return `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}: ${event.data || ''}`;
+    let output = `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}`;
+
+    // Add sourceId to the display if it exists
+    if (event.sourceId) {
+      output += ` [${chalk.cyan(event.sourceId)}]`;
+    }
+
+    // Add stream kind to the display if it exists
+    if (event.metadata?.streamKind) {
+      output += ` [${chalk.magenta(event.metadata.streamKind)}]`;
+    }
+
+    output += `: ${event.data || event.message || ''}`;
+
+    return output;
   } else {
     return JSON.stringify({
       seq,
       timestamp: new Date().toISOString(),
       source,
       event: event.event,
-      data: event.data
+      data: event.data,
+      message: event.message,
+      sourceId: event.sourceId,
+      correlationId: event.correlationId,
+      metadata: event.metadata
     });
   }
 }

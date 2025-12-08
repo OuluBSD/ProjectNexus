@@ -13,6 +13,8 @@ export interface ExecutionContext {
 export interface ContextState {
   activeProjectId?: string;
   activeProjectName?: string;
+  activeProjectCategory?: string;
+  activeProjectStatus?: string;
   activeRoadmapId?: string;
   activeRoadmapTitle?: string;
   activeChatId?: string;
@@ -35,7 +37,7 @@ export interface Session {
 export interface CommandResult {
   status: 'ok' | 'error';
   data: any;
-  message: string;
+  message?: string;
   errors: CommandError[];
 }
 

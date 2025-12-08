@@ -1,0 +1,414 @@
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 6c9d4e8..a3f8b5c 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -464,6 +464,18 @@ export class APIClient {
+       // Default response for unhandled endpoints
+       return {
+         status: 404,
+         data: { message: `Endpoint ${endpoint} not implemented in mock` },
+         headers: { 'content-type': 'application/json' }
+       };
++    } catch (error) {
++      return {
++        status: 500,
++        data: { error: error instanceof Error ? error.message : 'Unknown error' },
++        headers: { 'content-type': 'application/json' }
++      };
++    }
++  }
++
++  // Check for authentication specific endpoints and simulate auth errors
++  if (endpoint.startsWith('/projects') ||
++      endpoint.startsWith('/roadmaps') ||
++      endpoint.startsWith('/chats') ||
++      endpoint.startsWith('/debug')) {
++    // Simulate different auth responses for testing
++    if (headers['Authorization'] === 'Bearer invalid-token') {
++      return {
++        status: 401,
++        data: { message: 'Invalid authentication token' },
++        headers: { 'content-type': 'application/json' }
++      };
++    } else if (!headers['Authorization']) {
++      return {
++        status: 401,
++        data: { message: 'Authentication required' },
++        headers: { 'content-type': 'application/json' }
++      };
++    }
++  }
++
++  // Default response for unhandled endpoints
++  return {
++    status: 404,
++    data: { message: `Endpoint ${endpoint} not implemented in mock` },
++    headers: { 'content-type': 'application/json' }
++  };
++} catch (error) {
++  return {
++    status: 500,
++    data: { error: error instanceof Error ? error.message : 'Unknown error' },
++    headers: { 'content-type': 'application/json' }
++  };
++}
++
++// Specific project methods
++async getProjects(): Promise<ListProjectsResponse> {
++  const response = await this.makeRequest('/projects', { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { projects: response.data.projects || [] },
++    message: response.status === 200
++      ? 'Projects retrieved successfully'
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : 'Failed to retrieve projects'),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++async getProjectById(id: string): Promise<GetProjectResponse> {
++  const response = await this.makeRequest(`/projects/${id}`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { project: response.data.project || null },
++    message: response.status === 200
++      ? `Project ${id} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : `Failed to retrieve project ${id}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++// Roadmap methods
++async getRoadmaps(projectId: string): Promise<ListRoadmapsResponse> {
++  const response = await this.makeRequest(`/projects/${projectId}/roadmaps`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { roadmaps: response.data.roadmaps || [] },
++    message: response.status === 200
++      ? `Roadmaps for project ${projectId} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : `Failed to retrieve roadmaps for project ${projectId}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++async getRoadmapById(roadmapId: string): Promise<GetRoadmapResponse> {
++  const response = await this.makeRequest(`/roadmaps/${roadmapId}`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { roadmap: response.data.roadmap || null },
++    message: response.status === 200
++      ? `Roadmap ${roadmapId} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : `Failed to retrieve roadmap ${roadmapId}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++// Chat methods
++async getChats(roadmapId: string): Promise<ListChatsResponse> {
++  const response = await this.makeRequest(`/roadmaps/${roadmapId}/chats`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { chats: response.data.chats || [] },
++    message: response.status === 200
++      ? `Chats for roadmap ${roadmapId} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : `Failed to retrieve chats for roadmap ${roadmapId}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++async getChatById(chatId: string): Promise<GetChatResponse> {
++  const response = await this.makeRequest(`/chats/${chatId}`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { chat: response.data.chat || null },
++    message: response.status === 200
++      ? `Chat ${chatId} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : `Failed to retrieve chat ${chatId}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++// Debug Process methods
++async getProcesses(): Promise<ListProcessesResponse> {
++  const response = await this.makeRequest('/debug/processes', { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { processes: response.data.processes || [] },
++    message: response.status === 200
++      ? 'Processes retrieved successfully'
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : 'Failed to retrieve processes'),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++async getProcessById(id: string): Promise<GetProcessResponse> {
++  const response = await this.makeRequest(`/debug/processes/${id}`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { process: response.data.process || null },
++    message: response.status === 200
++      ? `Process ${id} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : response.data.message || `Failed to retrieve process ${id}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++// Debug WebSocket methods
++async getWebSockets(): Promise<ListWebSocketsResponse> {
++  const response = await this.makeRequest('/debug/websockets', { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { websockets: response.data.websockets || [] },
++    message: response.status === 200
++      ? 'WebSockets retrieved successfully'
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : 'Failed to retrieve WebSockets'),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++async getWebSocketById(id: string): Promise<GetWebSocketResponse> {
++  const response = await this.makeRequest(`/debug/websockets/${id}`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { websocket: response.data.websocket || null },
++    message: response.status === 200
++      ? `WebSocket ${id} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : response.data.message || `Failed to retrieve WebSocket ${id}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++// Debug Poll Session methods
++async getPollSessions(): Promise<ListPollSessionsResponse> {
++  const response = await this.makeRequest('/debug/poll-sessions', { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { pollSessions: response.data.pollSessions || [] },
++    message: response.status === 200
++      ? 'Poll sessions retrieved successfully'
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : 'Failed to retrieve poll sessions'),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
++
++async getPollSessionById(id: string): Promise<GetPollSessionResponse> {
++  const response = await this.makeRequest(`/debug/poll-sessions/${id}`, { method: 'GET', headers: {} });
++  const isAuthError = response.status === 401 || response.status === 403;
++
++  return {
++    status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
++    data: { pollSession: response.data.pollSession || null },
++    message: response.status === 200
++      ? `Poll session ${id} retrieved successfully`
++      : (isAuthError
++        ? 'Authentication required or invalid token'
++        : response.data.message || `Failed to retrieve poll session ${id}`),
++    errors: response.status === 200
++      ? []
++      : [{
++        type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++        message: response.data.message,
++        code: response.status
++      }]
++  };
++}
+
+diff --git a/src/commands/agent/project/list.ts b/src/commands/agent/project/list.ts
+index e7f9d4b..a2c5e6f 100644
+--- a/src/commands/agent/project/list.ts
++++ b/src/commands/agent/project/list.ts
+@@ -20,6 +20,9 @@ export class ProjectListHandler implements CommandHandler {
+ 
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve projects: ${response.message}`);
++      } else if (response.status === 'auth_error') {
++        // Handle authentication error specifically
++        throw new Error(`Authentication error: ${response.message}`);
+       }
+ 
+       // Filter projects if filter flag is provided
+
+diff --git a/src/commands/agent/roadmap/list.ts b/src/commands/agent/roadmap/list.ts
+index a3f8b5c..d4e5f6g 100644
+--- a/src/commands/agent/roadmap/list.ts
++++ b/src/commands/agent/roadmap/list.ts
+@@ -40,6 +40,9 @@ export class RoadmapListHandler implements CommandHandler {
+ 
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve roadmaps: ${response.message}`);
++      } else if (response.status === 'auth_error') {
++        // Handle authentication error specifically
++        throw new Error(`Authentication error: ${response.message}`);
+       }
+ 
+       // Filter roadmaps if filter flag is provided
+
+diff --git a/src/commands/agent/chat/list.ts b/src/commands/agent/chat/list.ts
+index f5d9a3b..b6c8d9e 100644
+--- a/src/commands/agent/chat/list.ts
++++ b/src/commands/agent/chat/list.ts
+@@ -30,6 +30,9 @@ export class ChatListHandler implements CommandHandler {
+ 
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve chats: ${response.message}`);
++      } else if (response.status === 'auth_error') {
++        // Handle authentication error specifically
++        throw new Error(`Authentication error: ${response.message}`);
+       }
+ 
+       return {
+
+diff --git a/src/main.ts b/src/main.ts
+index 4b8c2a1..e7f9d4b 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -14,10 +14,11 @@ registerCommandHandlers();
+ // Define standardized exit codes
+ enum ExitCode {
+   Success = 0,
+   GenericError = 1,
+   ValidationError = 2,
+   MissingContext = 3,
+   APIError = 4,
+   AuthError = 5,
+   StreamingInterruption = 6
+ }
+
+@@ -66,6 +66,9 @@ async function main(): Promise<void> {
+             case 'API_ERROR':
+               exitCode = ExitCode.APIError;
+               break;
++            case 'AUTH_ERROR':
++              exitCode = ExitCode.AuthError;
++              break;
+             case 'STREAM_INTERRUPTED':
+               exitCode = ExitCode.StreamingInterruption;
+               break;
+             default:
+               exitCode = ExitCode.GenericError;
+
+diff --git a/src/utils/hints.ts b/src/utils/hints.ts
+index dee2b1f..a1b2c3d 100644
+--- a/src/utils/hints.ts
++++ b/src/utils/hints.ts
+@@ -41,3 +41,6 @@ export const hints: Hint[] = [
+   },
+   {
+     errorType: 'CONFIG_PARSE_ERROR',
+     message: "Configuration file is corrupted. Run 'rm ~/.nexus/config.json' to reset configuration, or manually fix the JSON syntax in the config file."
++  },
++  {
++    errorType: 'AUTH_ERROR',
++    message: "Authentication required or token invalid. Run 'nexus auth login' to authenticate or check your credentials."
+   }
+ ];

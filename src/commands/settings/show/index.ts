@@ -15,12 +15,17 @@ export class SettingsShowHandler {
         errors: []
       };
     } catch (error: any) {
+      // Determine if this is a config parsing error
+      const errorType = error instanceof SyntaxError || error.message.includes('JSON') || error.message.includes('parse')
+        ? 'CONFIG_PARSE_ERROR'
+        : 'CONFIG_LOAD_ERROR';
+
       return {
         status: 'error',
         data: null,
         message: error.message,
         errors: [{
-          type: 'CONFIG_LOAD_ERROR',
+          type: errorType,
           message: error.message,
           timestamp: new Date().toISOString()
         }]

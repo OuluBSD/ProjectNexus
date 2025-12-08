@@ -9,9 +9,11 @@ import { ProjectCurrentHandler } from './agent/project/current';
 import { RoadmapListHandler } from './agent/roadmap/list';
 import { RoadmapViewHandler } from './agent/roadmap/view';
 import { RoadmapSelectHandler } from './agent/roadmap/select';
+import { RoadmapCurrentHandler } from './agent/roadmap/current';
 import { ChatListHandler } from './agent/chat/list';
 import { ChatViewHandler } from './agent/chat/view';
 import { ChatSelectHandler } from './agent/chat/select';
+import { ChatCurrentHandler } from './agent/chat/current';
 
 // Settings commands
 import { SettingsShowHandler } from './settings/show';
@@ -70,11 +72,13 @@ export function registerCommandHandlers(): void {
   handlerRegistry.register('agent.roadmap.list', new RoadmapListHandler());
   handlerRegistry.register('agent.roadmap.view', new RoadmapViewHandler());
   handlerRegistry.register('agent.roadmap.select', new RoadmapSelectHandler());
+  handlerRegistry.register('agent.roadmap.current', new RoadmapCurrentHandler());
 
   // Agent chat commands
   handlerRegistry.register('agent.chat.list', new ChatListHandler());
   handlerRegistry.register('agent.chat.view', new ChatViewHandler());
   handlerRegistry.register('agent.chat.select', new ChatSelectHandler());
+  handlerRegistry.register('agent.chat.current', new ChatCurrentHandler());
 
   // Settings commands
   handlerRegistry.register('settings.show', new SettingsShowHandler());

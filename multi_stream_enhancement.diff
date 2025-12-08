@@ -1,0 +1,187 @@
+diff --git a/src/observability/types.ts b/src/observability/types.ts
+index 865f243..a3b2c5d 100644
+--- a/src/observability/types.ts
++++ b/src/observability/types.ts
+@@ -1,14 +1,17 @@
+ export interface ObservabilityEvent {
+   seq: number; // incrementing sequence number
+   timestamp: string; // ISO8601
+   source: "ai" | "process" | "websocket" | "poll" | "network";
+   event: string; // "token", "log", "frame", "poll", "status", "error", "end", ...
+   data?: any; // event payload
+   message?: string; // optional human-readable message
+   correlationId?: string; // optional identifier to correlate related events
++  sourceId?: string; // optional identifier for the specific resource being monitored (process ID, network element, etc.)
++  metadata?: {
++    streamKind?: string; // identifier for the type of stream ('process-logs', 'network-health', etc.)
++    [key: string]: any;  // allow additional metadata properties
++  };
+ }
+
+diff --git a/src/observability/uol.ts b/src/observability/uol.ts
+index 9a8b1c2..d4e5f6g 100644
+--- a/src/observability/uol.ts
++++ b/src/observability/uol.ts
+@@ -31,21 +31,49 @@
+  */
+ export async function* wrapAsyncGenerator<T>(
+   source: "ai" | "process" | "websocket" | "poll" | "network",
+   generator: AsyncGenerator<T>,
+   event?: string,
++  sourceId?: string,
++  streamKind?: string
+ ): AsyncGenerator<ObservabilityEvent> {
+   const getSequenceNumber = createSeqCounter();
+   const correlationId = uuidv4(); // Generate a single correlation ID for the entire stream
+
++  // Emit a stream start event to mark the beginning of the stream
++  yield {
++    seq: getSequenceNumber(),
++    timestamp: new Date().toISOString(),
++    source,
++    event: 'stream-start',
++    message: `Started streaming ${streamKind || 'unknown'} from ${source}`,
++    correlationId,
++    sourceId,
++    metadata: {
++      streamKind: streamKind || `${source}-stream`
++    }
++  };
+
+   try {
+     for await (const rawEvent of generator) {
+       yield {
+         seq: getSequenceNumber(),
+         timestamp: new Date().toISOString(),
+         source,
+         event: event || (typeof rawEvent === 'object' && rawEvent && (rawEvent as any).event) ? (rawEvent as any).event : 'data',
+         data: rawEvent,
+         correlationId,
++        sourceId,
++        metadata: {
++          streamKind: streamKind || `${source}-stream`,
++          ...(typeof rawEvent === 'object' && rawEvent && (rawEvent as any).metadata ? (rawEvent as any).metadata : {})
++        }
+       };
+     }
+   } catch (error) {
+     // If interrupted, emit an interrupt event
+     if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted') || error.message.includes('interrupted'))) {
+       yield {
+         seq: getSequenceNumber(),
+         timestamp: new Date().toISOString(),
+         source,
+         event: 'interrupt',
+         message: 'Stream interrupted',
+         correlationId,
++        sourceId,
++        metadata: {
++          streamKind: streamKind || `${source}-stream`
++        }
+       };
+     } else {
+       throw error; // Re-throw other errors
+     }
+   }
+
++  // Emit a stream end event to mark the completion of the stream  
++  yield {
++    seq: getSequenceNumber(),
++    timestamp: new Date().toISOString(),
++    source,
++    event: 'stream-end',
++    message: `Completed streaming ${streamKind || 'unknown'} from ${source}`,
++    correlationId,
++    sourceId,
++    metadata: {
++      streamKind: streamKind || `${source}-stream`
++    }
++  };
+ }
+diff --git a/src/runtime/engine.ts b/src/runtime/engine.ts
+index 1b3402d..2c5d6e7 100644
+--- a/src/runtime/engine.ts
++++ b/src/runtime/engine.ts
+@@ -128,6 +128,23 @@
+         // Handle streaming generator - wrap in standardized observability events
+         try {
++          // Determine stream kind and sourceId based on the command
++          let streamKind = `${source}-stream`;
++          let sourceId: string | undefined;
++          
++          // Extract potential sourceId from the command arguments/flags
++          if (source === 'process' && context.flags && context.flags.id) {
++            sourceId = context.flags.id as string;
++            streamKind = 'process-logs';
++          } else if (source === 'network') {
++            streamKind = 'network-health';
++          } else if (source === 'websocket' && context.flags && context.flags.id) {
++            sourceId = context.flags.id as string;
++            streamKind = 'websocket-frames';
++          } else if (source === 'poll' && context.flags && context.flags.id) {
++            sourceId = context.flags.id as string;
++            streamKind = 'poll-events';
++          }
+
+           const generator = wrapAsyncGenerator(source, executionResult, undefined, sourceId, streamKind);
+           for await (const event of generator) {
+             // Check if we've received an interruption signal
+             if (interrupted) {
+               // Emit an interrupt event
+               const interruptEvent = {
+                 seq: event.seq + 1, // Use next sequence number
+                 timestamp: new Date().toISOString(),
+                 source,
+                 event: 'interrupt',
+                 message: 'Stream interrupted by user'
+               };
+               console.log(formatStreamingEvent(source, interruptEvent.seq, interruptEvent));
+               break;
+             }
+             // Print each event as a formatted line for streaming
+             console.log(formatStreamingEvent(source, event.seq, event));
+           }
+         } finally {
+diff --git a/src/utils/formatters.ts b/src/utils/formatters.ts
+index b7bc5b0..c8d9e0f 100644
+--- a/src/utils/formatters.ts
++++ b/src/utils/formatters.ts
+@@ -153,15 +153,32 @@
+   return obj.toString();
+ }
+
+ export function formatStreamingEvent(source: string, seq: number, event: any): string {
+   const config = loadConfigSync();
+
+   if (config.outputMode === 'pretty') {
+     const paddedSeq = seq.toString().padStart(3, '0');
+-    return `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}: ${event.data || ''}`;
++    let output = `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}`;
++    
++    // Add sourceId to the display if it exists
++    if (event.sourceId) {
++      output += ` [${chalk.cyan(event.sourceId)}]`;
++    }
++    
++    // Add stream kind to the display if it exists
++    if (event.metadata?.streamKind) {
++      output += ` [${chalk.magenta(event.metadata.streamKind)}]`;
++    }
++    
++    output += `: ${event.data || event.message || ''}`;
++    
++    return output;
+   } else {
+     return JSON.stringify({
+       seq,
+       timestamp: new Date().toISOString(),
+       source,
+       event: event.event,
+       data: event.data
++      message: event.message,
++      sourceId: event.sourceId,
++      correlationId: event.correlationId,
++      metadata: event.metadata
+     });
+   }
+ }

@@ -31,7 +31,7 @@ export class DebugProcessListHandler {
         status: 'error',
         data: null,
         message: 'Failed to retrieve processes',
-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
       };
     }
   }

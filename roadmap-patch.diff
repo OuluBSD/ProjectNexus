@@ -1,0 +1,76 @@
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 4d99f51..9e9b9a6 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -68,6 +68,7 @@ export interface APIResponse {
+ // Roadmap types
+ export interface RoadmapSummary {
+   id: string;
++  selected?: boolean;  // Indicates if this roadmap is currently selected
+   title: string;
+   status: string;
+   progress: number;
+@@ -77,6 +78,7 @@ export interface RoadmapSummary {
+   metaSummary: string;
+   projectRef?: string;  // Reference to the project it belongs to
+   projectMetadata?: {
++    id: string;
+     name: string;
+     category: string;
+     status: string;
+diff --git a/src/commands/agent/roadmap/list.ts b/src/commands/agent/roadmap/list.ts
+index 4d2f65b..2c587b2 100644
+--- a/src/commands/agent/roadmap/list.ts
++++ b/src/commands/agent/roadmap/list.ts
+@@ -1,6 +1,8 @@
+ // src/commands/agent/roadmap/list.ts
+ // Roadmap list command handler
++import { API_CLIENT } from '../../../api/client';
++import { ContextManager } from '../../../state/context-manager';
+ import { CommandHandler } from '../../../runtime/handler-registry';
+ import { ExecutionContext } from '../../../runtime/types';
+ import { API_CLIENT } from '../../../api/client';
+@@ -15,12 +17,25 @@ export class RoadmapListHandler implements CommandHandler {
+       // Call API to get roadmaps for the project
+       const response = await API_CLIENT.getRoadmaps(projectId);
+ 
++      // Get current context to determine selected roadmap
++      const contextManager = new ContextManager();
++      const currentContext = await contextManager.load();
++      const selectedRoadmapId = currentContext.activeRoadmapId;
++
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve roadmaps: ${response.message}`);
+       }
+ 
+       // Filter roadmaps if filter flag is provided
+       let roadmaps = response.data.roadmaps;
++      
++      // Add selected flag and project metadata to each roadmap
++      roadmaps = roadmaps.map((roadmap: any) => ({
++        ...roadmap,
++        selected: roadmap.id === selectedRoadmapId,
++        projectMetadata: { id: projectId, name: currentContext.activeProjectName, category: currentContext.activeProjectCategory, status: currentContext.activeProjectStatus }
++      }));
++
+       if (filter) {
+         roadmaps = roadmaps.filter((roadmap: any) =>
+           roadmap.title.toLowerCase().includes(filter.toLowerCase()) ||
+diff --git a/src/commands/agent/roadmap/select.ts b/src/commands/agent/roadmap/select.ts
+index 05c332a..d4c359d 100644
+--- a/src/commands/agent/roadmap/select.ts
++++ b/src/commands/agent/roadmap/select.ts
+@@ -33,7 +33,13 @@ export class RoadmapSelectHandler implements CommandHandler {
+       return {
+         roadmap: {
+           id: response.data.roadmap.id,
+-          title: response.data.roadmap.title
++          title: response.data.roadmap.title,
++          selected: true,  // Mark as selected since this is the selected roadmap
++          status: response.data.roadmap.status,
++          progress: response.data.roadmap.progress,
++          projectRef: response.data.roadmap.projectRef,
++          projectMetadata: { id: response.data.roadmap.projectRef, name: "", category: "", status: "" } // Simplified for consistency
+         },
+         context: {
+           projectId: newContext.activeProjectId,

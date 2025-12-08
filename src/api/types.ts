@@ -167,6 +167,7 @@ export interface AiTokenEvent {
   event: 'token' | 'done' | 'error';
   content?: string;
   messageId?: string;
+  chunkIndex?: number;  // Index of this token chunk in the sequence
   error?: string;
 }
 

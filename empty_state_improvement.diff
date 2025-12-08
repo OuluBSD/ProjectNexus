@@ -1,0 +1,49 @@
+diff --git a/src/commands/agent/project/list.ts b/src/commands/agent/project/list.ts
+index 4b8c2a1..e7f9d4b 100644
+--- a/src/commands/agent/project/list.ts
++++ b/src/commands/agent/project/list.ts
+@@ -30,7 +30,8 @@ export class ProjectListHandler implements CommandHandler {
+         projects = projects.filter(project => project.status !== 'archived');
+      }
+ 
+-      return {
++      return {
+         projects,
+-      };
++        count: projects.length
++      };
+     } catch (error) {
+       throw new Error(`Failed to list projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
+     }
+diff --git a/src/commands/agent/roadmap/list.ts b/src/commands/agent/roadmap/list.ts
+index 6c9d4e2..a3f8b5c 100644
+--- a/src/commands/agent/roadmap/list.ts
++++ b/src/commands/agent/roadmap/list.ts
+@@ -58,7 +58,8 @@ export class RoadmapListHandler implements CommandHandler {
+        );
+      }
+ 
+-      return {
++      return {
+        roadmaps
+-      };
++        count: roadmaps.length
++      };
+     } catch (error) {
+       throw new Error(`Failed to list roadmaps: ${(error as Error).message}`);
+     }
+diff --git a/src/commands/agent/chat/list.ts b/src/commands/agent/chat/list.ts
+index 2a4c6e8..f5d9a3b 100644
+--- a/src/commands/agent/chat/list.ts
++++ b/src/commands/agent/chat/list.ts
+@@ -30,7 +30,8 @@ export class ChatListHandler implements CommandHandler {
+ 
+      return {
+-        chats: response.data.chats
+-      };
++        chats: response.data.chats,
++        count: response.data.chats.length
++      };
+     } catch (error) {
+       throw new Error(`Failed to list chats: ${(error as Error).message}`);
+     }

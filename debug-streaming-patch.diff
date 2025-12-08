@@ -1,0 +1,99 @@
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 4d99f51..1234567 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -801,15 +801,17 @@ export class APIClient {
+   async *streamProcessLogs(processId: string) {
+     // Mock implementation - in a real implementation, this would connect to a streaming endpoint
+     // For this mock implementation, we'll generate fake log events
+
+     const events = [
+-      { event: 'log', timestamp: new Date().toISOString(), data: { line: `Starting process ${processId}`, level: 'info' } },
+-      { event: 'log', timestamp: new Date().toISOString(), data: { line: 'Initializing system resources', level: 'info' } },
+-      { event: 'log', timestamp: new Date().toISOString(), data: { line: 'Loading configuration files', level: 'debug' } },
+-      { event: 'log', timestamp: new Date().toISOString(), data: { line: 'Establishing database connections', level: 'info' } },
+-      { event: 'log', timestamp: new Date().toISOString(), data: { line: 'Starting network interface', level: 'info' } },
+-      { event: 'log', timestamp: new Date().toISOString(), data: { line: 'Service ready to accept requests', level: 'info' } },
+-      { event: 'status', timestamp: new Date().toISOString(), message: 'Process is running normally' },
+-      { event: 'end', timestamp: new Date().toISOString() }
++      { event: 'log', sourceId: processId, timestamp: new Date().toISOString(), data: { line: `Starting process ${processId}`, level: 'info' } },
++      { event: 'log', sourceId: processId, timestamp: new Date().toISOString(), data: { line: 'Initializing system resources', level: 'info' } },
++      { event: 'log', sourceId: processId, timestamp: new Date().toISOString(), data: { line: 'Loading configuration files', level: 'debug' } },
++      { event: 'log', sourceId: processId, timestamp: new Date().toISOString(), data: { line: 'Establishing database connections', level: 'info' } },
++      { event: 'log', sourceId: processId, timestamp: new Date().toISOString(), data: { line: 'Starting network interface', level: 'info' } },
++      { event: 'log', sourceId: processId, timestamp: new Date().toISOString(), data: { line: 'Service ready to accept requests', level: 'info' } },
++      { event: 'status', sourceId: processId, timestamp: new Date().toISOString(), message: 'Process is running normally' },
++      { event: 'end', sourceId: processId, timestamp: new Date().toISOString() }
+     ];
+
+     for (const event of events) {
+       await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50)); // Random delay between 50-150ms
+       yield event;
+     }
+   }
+
+   async *streamWebSocketFrames(wsId: string) {
+     // Mock implementation - in a real implementation, this would connect to a streaming endpoint
+     // For this mock implementation, we'll generate fake websocket frame events
+
+     const events = [
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'open', direction: 'outbound', payload: { type: 'connect', sessionId: wsId } } },
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'message', direction: 'inbound', payload: { type: 'request', action: 'getStatus' } } },
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'message', direction: 'outbound', payload: { type: 'response', action: 'getStatus', status: 'active' } } },
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'message', direction: 'inbound', payload: { type: 'request', action: 'updateData' } } },
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'message', direction: 'outbound', payload: { type: 'response', action: 'updateData', success: true } } },
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'ping', direction: 'outbound', payload: {} } },
+-      { event: 'frame', timestamp: new Date().toISOString(), data: { type: 'pong', direction: 'inbound', payload: {} } },
+-      { event: 'status', timestamp: new Date().toISOString(), message: 'WebSocket connection is stable' },
+-      { event: 'end', timestamp: new Date().toISOString() }
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'open', direction: 'outbound', payload: { type: 'connect', sessionId: wsId } } },
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'message', direction: 'inbound', payload: { type: 'request', action: 'getStatus' } } },
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'message', direction: 'outbound', payload: { type: 'response', action: 'getStatus', status: 'active' } } },
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'message', direction: 'inbound', payload: { type: 'request', action: 'updateData' } } },
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'message', direction: 'outbound', payload: { type: 'response', action: 'updateData', success: true } } },
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'ping', direction: 'outbound', payload: {} } },
++      { event: 'frame', sourceId: wsId, timestamp: new Date().toISOString(), data: { type: 'pong', direction: 'inbound', payload: {} } },
++      { event: 'status', sourceId: wsId, timestamp: new Date().toISOString(), message: 'WebSocket connection is stable' },
++      { event: 'end', sourceId: wsId, timestamp: new Date().toISOString() }
+     ];
+
+     for (const event of events) {
+       await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50)); // Random delay between 50-150ms
+       yield event;
+     }
+   }
+
+   async *streamPollEvents(pollId: string) {
+     // Mock implementation - in a real implementation, this would connect to a streaming endpoint
+     // For this mock implementation, we'll generate fake poll session events
+
+     const events = [
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/status', method: 'GET', requestId: `req-${Date.now()}-1` } },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'response', status: 200, requestId: `req-${Date.now()}-1`, responseTimeMs: 15 } },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/data', method: 'GET', requestId: `req-${Date.now()}-2` } },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'response', status: 200, requestId: `req-${Date.now()}-2`, responseTimeMs: 22 } },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/health', method: 'GET', requestId: `req-${Date.now()}-3` } },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'response', status: 500, requestId: `req-${Date.now()}-3`, responseTimeMs: 5 } },
+-      { event: 'status', timestamp: new Date().toISOString(), message: 'Health check failed, retrying...' },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/health', method: 'GET', requestId: `req-${Date.now()}-4` } },
+-      { event: 'poll', timestamp: new Date().toISOString(), data: { type: 'response', status: 200, requestId: `req-${Date.now()}-4`, responseTimeMs: 12 } },
+-      { event: 'status', timestamp: new Date().toISOString(), message: 'Poll session running normally' },
+-      { event: 'end', timestamp: new Date().toISOString() }
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/status', method: 'GET', requestId: `req-${Date.now()}-1` } },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'response', status: 200, requestId: `req-${Date.now()}-1`, responseTimeMs: 15 } },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/data', method: 'GET', requestId: `req-${Date.now()}-2` } },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'response', status: 200, requestId: `req-${Date.now()}-2`, responseTimeMs: 22 } },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/health', method: 'GET', requestId: `req-${Date.now()}-3` } },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'response', status: 500, requestId: `req-${Date.now()}-3`, responseTimeMs: 5 } },
++      { event: 'status', sourceId: pollId, timestamp: new Date().toISOString(), message: 'Health check failed, retrying...' },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'request', url: '/api/health', method: 'GET', requestId: `req-${Date.now()}-4` } },
++      { event: 'poll', sourceId: pollId, timestamp: new Date().toISOString(), data: { type: 'response', status: 200, requestId: `req-${Date.now()}-4`, responseTimeMs: 12 } },
++      { event: 'status', sourceId: pollId, timestamp: new Date().toISOString(), message: 'Poll session running normally' },
++      { event: 'end', sourceId: pollId, timestamp: new Date().toISOString() }
+     ];
+
+     for (const event of events) {
+       await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50)); // Random delay between 50-150ms
+       yield event;
+     }
+   }

@@ -1,0 +1,23 @@
+diff --git a/src/utils/formatters.ts b/src/utils/formatters.ts
+index 4d99f51..6287a6c 100644
+--- a/src/utils/formatters.ts
++++ b/src/utils/formatters.ts
+@@ -134,7 +134,12 @@ export function formatStreamingEvent(source: string, seq: number, event: any):
+   if (config.outputMode === 'pretty') {
+     const paddedSeq = seq.toString().padStart(3, '0');
+-    return `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}: ${event.data || ''}`;
++    if (event.data !== undefined && event.data !== null) {
++      return `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}: ${event.data}`;
++    } else {
++      return `[${chalk.blue(source)}][${chalk.yellow(paddedSeq)}] ${chalk.green(event.event)}`;
++    }
+   } else {
+     return JSON.stringify({
+       seq,
+       timestamp: new Date().toISOString(),
+       source,
+       event: event.event,
+       data: event.data
+     });
+   }
+ }

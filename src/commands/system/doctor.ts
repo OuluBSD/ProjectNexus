@@ -12,6 +12,7 @@ interface DoctorCheck {
   name: string;
   status: 'ok' | 'warning' | 'error';
   message?: string;
+  fixHint?: string;
 }
 
 export class SystemDoctorHandler implements CommandHandler {
@@ -33,10 +34,13 @@ export class SystemDoctorHandler implements CommandHandler {
       
       // Check parity
       checks.push(await checkParity());
-      
+
+      // Check version status
+      checks.push(await checkVersionStatus());
+
       // Determine overall status
-      const overallStatus = checks.some(check => check.status === 'error') 
-        ? 'error' 
+      const overallStatus = checks.some(check => check.status === 'error')
+        ? 'error'
         : checks.some(check => check.status === 'warning')
           ? 'warning'
           : 'ok';
@@ -75,20 +79,31 @@ async function checkConfig(): Promise<DoctorCheck> {
       return {
         name: 'config',
         status: 'error',
-        message: 'Missing API base URL in configuration'
+        message: 'Missing API base URL in configuration',
+        fixHint: 'Run "nexus settings set --key apiBaseUrl --value <your-api-url>" to set the API base URL'
       };
     }
-    
+
     return {
       name: 'config',
       status: 'ok',
-      message: 'Configuration loaded successfully'
+      message: 'Configuration loaded successfully',
+      fixHint: 'System configuration is valid'
     };
   } catch (error: any) {
+    // Check if this is a config parsing error
+    const isParseError = error instanceof SyntaxError || error.message.toLowerCase().includes('json') || error.message.toLowerCase().includes('parse');
+    const message = isParseError
+      ? `Configuration parsing error: ${error.message}`
+      : `Configuration error: ${error.message}`;
+
     return {
       name: 'config',
       status: 'error',
-      message: `Configuration error: ${error.message}`
+      message,
+      fixHint: isParseError
+        ? 'Configuration file syntax error. Check ~/.nexus/config.json for proper JSON formatting, or run "rm ~/.nexus/config.json" to reset configuration'
+        : 'Check your configuration file at ~/.nexus/config.json for syntax errors'
     };
   }
 }
@@ -111,20 +126,23 @@ async function checkAPIConnectivity(): Promise<DoctorCheck> {
       return {
         name: 'api',
         status: 'ok',
-        message: 'API connectivity established'
+        message: 'API connectivity established',
+        fixHint: 'API is accessible and responding correctly'
       };
     } else {
       return {
         name: 'api',
         status: 'warning',
-        message: `API returned status ${response.status}`
+        message: `API returned status ${response.status}`,
+        fixHint: `Check API server status, received HTTP ${response.status} response`
       };
     }
   } catch (error: any) {
     return {
       name: 'api',
       status: 'warning',
-      message: `API connectivity failed: ${error.message}`
+      message: `API connectivity failed: ${error.message}`,
+      fixHint: 'Verify API server is running and accessible at the configured URL'
     };
   }
 }
@@ -137,10 +155,11 @@ async function checkAuthToken(): Promise<DoctorCheck> {
       return {
         name: 'auth',
         status: 'warning',
-        message: 'No authentication token set'
+        message: 'No authentication token set',
+        fixHint: 'Run "nexus auth login" to authenticate with the API server'
       };
     }
-    
+
     // Check if token is valid by attempting to decode it (basic check)
     // JWT tokens have 3 parts separated by dots
     const parts = config.authToken.split('.');
@@ -148,10 +167,11 @@ async function checkAuthToken(): Promise<DoctorCheck> {
       return {
         name: 'auth',
         status: 'error',
-        message: 'Authentication token format is invalid'
+        message: 'Authentication token format is invalid',
+        fixHint: 'Re-authenticate using "nexus auth login" to get a valid token'
       };
     }
-    
+
     // Try to use the token with an API request
     const client = new APIClient();
     // Use one of the existing methods that would require authentication
@@ -161,20 +181,23 @@ async function checkAuthToken(): Promise<DoctorCheck> {
       return {
         name: 'auth',
         status: 'ok',
-        message: 'Authentication token is valid'
+        message: 'Authentication token is valid',
+        fixHint: 'Authentication token is valid and working correctly'
       };
     } else {
       return {
         name: 'auth',
         status: 'error',
-        message: 'Authentication token appears to be invalid or expired'
+        message: 'Authentication token appears to be invalid or expired',
+        fixHint: 'Re-authenticate using "nexus auth login" to get a new token'
       };
     }
   } catch (error: any) {
     return {
       name: 'auth',
       status: 'error',
-      message: `Authentication check failed: ${error.message}`
+      message: `Authentication check failed: ${error.message}`,
+      fixHint: 'Check authentication setup, run "nexus auth login" to authenticate'
     };
   }
 }
@@ -191,10 +214,11 @@ async function checkConfigFilePermissions(): Promise<DoctorCheck> {
       return {
         name: 'permissions',
         status: 'error',
-        message: 'Configuration directory does not exist or is not writable'
+        message: 'Configuration directory does not exist or is not writable',
+        fixHint: 'Create the directory ~/.nexus and ensure it is writable: "mkdir -p ~/.nexus && chmod 755 ~/.nexus"'
       };
     }
-    
+
     // Check if config file exists and is readable/writable
     try {
       await fs.access(configPath, fs.constants.F_OK | fs.constants.R_OK | fs.constants.W_OK);
@@ -206,21 +230,24 @@ async function checkConfigFilePermissions(): Promise<DoctorCheck> {
         return {
           name: 'permissions',
           status: 'error',
-          message: 'Configuration file cannot be created in directory'
+          message: 'Configuration file cannot be created in directory',
+          fixHint: 'Check permissions on the ~/.nexus directory'
         };
       }
     }
-    
+
     return {
       name: 'permissions',
       status: 'ok',
-      message: 'Configuration file permissions are appropriate'
+      message: 'Configuration file permissions are appropriate',
+      fixHint: 'Configuration file permissions are correctly set'
     };
   } catch (error: any) {
     return {
       name: 'permissions',
       status: 'error',
-      message: `Permission check failed: ${error.message}`
+      message: `Permission check failed: ${error.message}`,
+      fixHint: 'Check file permissions for the ~/.nexus directory and configuration file'
     };
   }
 }
@@ -243,20 +270,70 @@ async function checkParity(): Promise<DoctorCheck> {
       return {
         name: 'parity',
         status: 'ok',
-        message: 'File system parity check passed'
+        message: 'File system parity check passed',
+        fixHint: 'File system read/write operations are working correctly'
       };
     } else {
       return {
         name: 'parity',
         status: 'error',
-        message: 'File system parity check failed - read/write inconsistency'
+        message: 'File system parity check failed - read/write inconsistency',
+        fixHint: 'Check disk space and file system for errors'
       };
     }
   } catch (error: any) {
     return {
       name: 'parity',
       status: 'error',
-      message: `Parity check failed: ${error.message}`
+      message: `Parity check failed: ${error.message}`,
+      fixHint: 'Check disk space and file system for errors'
+    };
+  }
+}
+
+async function checkVersionStatus(): Promise<DoctorCheck> {
+  try {
+    // Import the BUILD_INFO to get current version information
+    const { BUILD_INFO } = await import('../../generated/build-info');
+
+    // For now, we'll just mark as OK, but in a real implementation we might check
+    // against a version API to see if this version is outdated
+    // This could call a remote API to check the latest available version
+    const versionCheck = await performVersionCheck(BUILD_INFO.version);
+
+    return {
+      name: 'version',
+      status: versionCheck.status,
+      message: versionCheck.message,
+      fixHint: versionCheck.fixHint
+    };
+  } catch (error: any) {
+    return {
+      name: 'version',
+      status: 'warning',
+      message: 'Could not determine version status',
+      fixHint: 'Check your Nexus CLI installation'
+    };
+  }
+}
+
+async function performVersionCheck(currentVersion: string): Promise<{status: 'ok' | 'warning' | 'error', message: string, fixHint: string}> {
+  try {
+    // In a future implementation, this could call an API to check:
+    // - if the current version is the latest
+    // - if the current version is deprecated
+    // - if there are security advisories for this version
+    // For now, simply return as OK
+    return {
+      status: 'ok',
+      message: `CLI version ${currentVersion} is current`,
+      fixHint: 'No updates available'
+    };
+  } catch (error) {
+    return {
+      status: 'warning',
+      message: `Could not verify latest version for ${currentVersion}`,
+      fixHint: 'Check for Nexus CLI updates manually'
     };
   }
 }

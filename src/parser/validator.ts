@@ -182,6 +182,14 @@ const COMMAND_SPECS: CommandSpec[] = [
     contextRequired: []
   },
   {
+    commandId: "agent.roadmap.current",
+    namespace: "agent",
+    segments: ["roadmap", "current"],
+    args: {},
+    flags: {},
+    contextRequired: ["activeProject"]
+  },
+  {
     commandId: "agent.chat.list",
     namespace: "agent",
     segments: ["chat", "list"],
@@ -237,6 +245,14 @@ const COMMAND_SPECS: CommandSpec[] = [
       "title": { type: "string", required: true, description: "Chat title (alternative to --id)", alternatives: ["id"] }
     },
     contextRequired: []
+  },
+  {
+    commandId: "agent.chat.current",
+    namespace: "agent",
+    segments: ["chat", "current"],
+    args: {},
+    flags: {},
+    contextRequired: ["activeProject", "activeRoadmap"]
   },
   {
     commandId: "agent.chat.send",

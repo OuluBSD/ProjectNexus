@@ -1,0 +1,297 @@
+diff --git a/src/commands/settings/show/index.ts b/src/commands/settings/show/index.ts
+index 2a5115d..fe2804c 100644
+--- a/src/commands/settings/show/index.ts
++++ b/src/commands/settings/show/index.ts
+@@ -15,12 +15,17 @@ export class SettingsShowHandler {
+         errors: []
+       };
+     } catch (error: any) {
++      // Determine if this is a config parsing error
++      const errorType = error instanceof SyntaxError || error.message.includes('JSON') || error.message.includes('parse')
++        ? 'CONFIG_PARSE_ERROR'
++        : 'CONFIG_LOAD_ERROR';
++
+       return {
+         status: 'error',
+         data: null,
+         message: error.message,
+         errors: [{
+-          type: 'CONFIG_LOAD_ERROR',
++          type: errorType,
+           message: error.message,
+           timestamp: new Date().toISOString()
+         }]
+diff --git a/src/commands/system/doctor.ts b/src/commands/system/doctor.ts
+index 09c9e84..1b3402d 100644
+--- a/src/commands/system/doctor.ts
++++ b/src/commands/system/doctor.ts
+@@ -12,6 +12,7 @@ interface DoctorCheck {
+   name: string;
+   status: 'ok' | 'warning' | 'error';
+   message?: string;
++  fixHint?: string;
+ }
+
+ export class SystemDoctorHandler implements CommandHandler {
+@@ -75,20 +76,31 @@ async function checkConfig(): Promise<DoctorCheck> {
+       return {
+         name: 'config',
+         status: 'error',
+-        message: 'Missing API base URL in configuration'
++        message: 'Missing API base URL in configuration',
++        fixHint: 'Run "nexus settings set --key apiBaseUrl --value <your-api-url>" to set the API base URL'
+       };
+     }
+-
++
+     return {
+       name: 'config',
+       status: 'ok',
+-      message: 'Configuration loaded successfully'
++      message: 'Configuration loaded successfully',
++      fixHint: 'System configuration is valid'
+     };
+   } catch (error: any) {
++    // Check if this is a config parsing error
++    const isParseError = error instanceof SyntaxError || error.message.toLowerCase().includes('json') || error.message.toLowerCase().includes('parse');
++    const message = isParseError
++      ? `Configuration parsing error: ${error.message}`
++      : `Configuration error: ${error.message}`;
++
+     return {
+       name: 'config',
+       status: 'error',
+-      message: `Configuration error: ${error.message}`
++      message,
++      fixHint: isParseError
++        ? 'Configuration file syntax error. Check ~/.nexus/config.json for proper JSON formatting, or run "rm ~/.nexus/config.json" to reset configuration'
++        : 'Check your configuration file at ~/.nexus/config.json for syntax errors'
+     };
+   }
+ }
+@@ -111,20 +123,23 @@ async function checkAPIConnectivity(): Promise<DoctorCheck> {
+       return {
+         name: 'api',
+         status: 'ok',
+-        message: 'API connectivity established'
++        message: 'API connectivity established',
++        fixHint: 'API is accessible and responding correctly'
+       };
+     } else {
+       return {
+         name: 'api',
+         status: 'warning',
+-        message: `API returned status ${response.status}`
++        message: `API returned status ${response.status}`,
++        fixHint: `Check API server status, received HTTP ${response.status} response`
+       };
+     }
+   } catch (error: any) {
+     return {
+       name: 'api',
+       status: 'warning',
+-      message: `API connectivity failed: ${error.message}`
++      message: `API connectivity failed: ${error.message}`,
++      fixHint: 'Verify API server is running and accessible at the configured URL'
+     };
+   }
+ }
+@@ -137,10 +152,11 @@ async function checkAuthToken(): Promise<DoctorCheck> {
+       return {
+         name: 'auth',
+         status: 'warning',
+-        message: 'No authentication token set'
++        message: 'No authentication token set',
++        fixHint: 'Run "nexus auth login" to authenticate with the API server'
+       };
+     }
+-
++
+     // Check if token is valid by attempting to decode it (basic check)
+     // JWT tokens have 3 parts separated by dots
+     const parts = config.authToken.split('.');
+@@ -148,10 +164,11 @@ async function checkAuthToken(): Promise<DoctorCheck> {
+       return {
+         name: 'auth',
+         status: 'error',
+-        message: 'Authentication token format is invalid'
++        message: 'Authentication token format is invalid',
++        fixHint: 'Re-authenticate using "nexus auth login" to get a valid token'
+       };
+     }
+-
++
+     // Try to use the token with an API request
+     const client = new APIClient();
+     // Use one of the existing methods that would require authentication
+@@ -161,20 +178,23 @@ async function checkAuthToken(): Promise<DoctorCheck> {
+       return {
+         name: 'auth',
+         status: 'ok',
+-        message: 'Authentication token is valid'
++        message: 'Authentication token is valid',
++        fixHint: 'Authentication token is valid and working correctly'
+       };
+     } else {
+       return {
+         name: 'auth',
+         status: 'error',
+-        message: 'Authentication token appears to be invalid or expired'
++        message: 'Authentication token appears to be invalid or expired',
++        fixHint: 'Re-authenticate using "nexus auth login" to get a new token'
+       };
+     }
+   } catch (error: any) {
+     return {
+       name: 'auth',
+       status: 'error',
+-      message: `Authentication check failed: ${error.message}`
++      message: `Authentication check failed: ${error.message}`,
++      fixHint: 'Check authentication setup, run "nexus auth login" to authenticate'
+     };
+   }
+ }
+@@ -191,10 +211,11 @@ async function checkConfigFilePermissions(): Promise<DoctorCheck> {
+       return {
+         name: 'permissions',
+         status: 'error',
+-        message: 'Configuration directory does not exist or is not writable'
++        message: 'Configuration directory does not exist or is not writable',
++        fixHint: 'Create the directory ~/.nexus and ensure it is writable: "mkdir -p ~/.nexus && chmod 755 ~/.nexus"'
+       };
+     }
+-
++
+     // Check if config file exists and is readable/writable
+     try {
+       await fs.access(configPath, fs.constants.F_OK | fs.constants.R_OK | fs.constants.W_OK);
+@@ -206,21 +227,24 @@ async function checkConfigFilePermissions(): Promise<DoctorCheck> {
+         return {
+           name: 'permissions',
+           status: 'error',
+-          message: 'Configuration file cannot be created in directory'
++          message: 'Configuration file cannot be created in directory',
++          fixHint: 'Check permissions on the ~/.nexus directory'
+         };
+       }
+     }
+-
++
+     return {
+       name: 'permissions',
+       status: 'ok',
+-      message: 'Configuration file permissions are appropriate'
++      message: 'Configuration file permissions are appropriate',
++      fixHint: 'Configuration file permissions are correctly set'
+     };
+   } catch (error: any) {
+     return {
+       name: 'permissions',
+       status: 'error',
+-      message: `Permission check failed: ${error.message}`
++      message: `Permission check failed: ${error.message}`,
++      fixHint: 'Check file permissions for the ~/.nexus directory and configuration file'
+     };
+   }
+ }
+@@ -243,20 +267,23 @@ async function checkParity(): Promise<DoctorCheck> {
+       return {
+         name: 'parity',
+         status: 'ok',
+-        message: 'File system parity check passed'
++        message: 'File system parity check passed',
++        fixHint: 'File system read/write operations are working correctly'
+       };
+     } else {
+       return {
+         name: 'parity',
+         status: 'error',
+-        message: 'File system parity check failed - read/write inconsistency'
++        message: 'File system parity check failed - read/write inconsistency',
++        fixHint: 'Check disk space and file system for errors'
+       };
+     }
+   } catch (error: any) {
+     return {
+       name: 'parity',
+       status: 'error',
+-      message: `Parity check failed: ${error.message}`
++      message: `Parity check failed: ${error.message}`,
++      fixHint: 'Check disk space and file system for errors'
+     };
+   }
+ }
+\ No newline at end of file
+diff --git a/src/state/config-store.ts b/src/state/config-store.ts
+index 55b71f7..60e2622 100644
+--- a/src/state/config-store.ts
++++ b/src/state/config-store.ts
+@@ -79,6 +79,20 @@ export async function loadConfig(): Promise<Config> {
+       const defaultConfig = getDefaultConfig();
+       await saveConfig(defaultConfig);
+       return defaultConfig;
++    } else if (error instanceof SyntaxError) {
++      // JSON parsing error - config file is corrupted
++      console.error(`Config file corrupted: ${error.message}`);
++      // Return default config but log the issue
++      const defaultConfig = getDefaultConfig();
++      // Try to backup the corrupted config
++      try {
++        const backupPath = configPath + '.backup';
++        await fs.copyFile(configPath, backupPath);
++        console.error(`Corrupted config backed up to: ${backupPath}`);
++      } catch (backupError) {
++        console.error(`Failed to backup corrupted config: ${backupError.message}`);
++      }
++      return defaultConfig;
+     } else {
+       // Other error occurred, log and return defaults
+       console.error(`Error reading config file: ${error.message}`);
+diff --git a/src/utils/formatters.ts b/src/utils/formatters.ts
+index 7dce5f1..b7bc5b0 100644
+--- a/src/utils/formatters.ts
++++ b/src/utils/formatters.ts
+@@ -46,7 +46,28 @@ function loadConfigSync(): any {
+
+     if (fs.existsSync(configPath)) {
+       const configContent = fs.readFileSync(configPath, 'utf-8');
+-      return JSON.parse(configContent);
++      try {
++        return JSON.parse(configContent);
++      } catch (parseError) {
++        // Log the parsing error for debugging
++        console.error(`Config file corrupted: ${parseError.message}`);
++        console.error(`Config path: ${configPath}`);
++
++        // Try to backup the corrupted config
++        try {
++          const backupPath = configPath + '.backup';
++          fs.copyFileSync(configPath, backupPath);
++          console.error(`Corrupted config backed up to: ${backupPath}`);
++        } catch (backupError) {
++          console.error(`Failed to backup corrupted config: ${backupError.message}`);
++        }
++
++        // Return default config
++        return {
++          outputMode: 'pretty',
++          showBanner: true
++        };
++      }
+     } else {
+       // Return default config if file doesn't exist
+       return {
+diff --git a/src/utils/hints.ts b/src/utils/hints.ts
+index 865a243..dee2b1f 100644
+--- a/src/utils/hints.ts
++++ b/src/utils/hints.ts
+@@ -34,6 +34,10 @@ export const hints: Hint[] = [
+   {
+     errorType: 'MISSING_AI_SESSION_CONTEXT',
+     message: "Tip: Use 'nexus ai session create' to start an AI session."
++  },
++  {
++    errorType: 'CONFIG_PARSE_ERROR',
++    message: "Configuration file is corrupted. Run 'rm ~/.nexus/config.json' to reset configuration, or manually fix the JSON syntax in the config file."
+   }
+ ];

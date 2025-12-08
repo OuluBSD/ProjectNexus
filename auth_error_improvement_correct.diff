@@ -1,0 +1,1271 @@
+diff --git a/deps/qwen-code b/deps/qwen-code
+--- a/deps/qwen-code
++++ b/deps/qwen-code
+@@ -1 +1 @@
+-Subproject commit 86452602d9e7ec9c5ebb859fe28ef6b7d5d5760a
++Subproject commit 86452602d9e7ec9c5ebb859fe28ef6b7d5d5760a-dirty
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index ee37bd1..fe2d2bd 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -8,6 +8,9 @@ importers:
+ 
+   .:
+     dependencies:
++      chalk:
++        specifier: ^5.3.0
++        version: 5.6.2
+       ts-node:
+         specifier: ^10.9.1
+         version: 10.9.2(@types/node@18.19.130)(typescript@5.3.3)
+@@ -6222,7 +6225,7 @@ snapshots:
+       eslint: 8.56.0
+       eslint-import-resolver-node: 0.3.9
+       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@8.56.0))(eslint@8.56.0)
+-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.3.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.56.0)
++      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.3.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@8.56.0))(eslint@8.56.0))(eslint@8.56.0)
+       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.56.0)
+       eslint-plugin-react: 7.37.5(eslint@8.56.0)
+       eslint-plugin-react-hooks: 5.0.0-canary-7118f5dd7-20230705(eslint@8.56.0)
+@@ -6252,7 +6255,7 @@ snapshots:
+       tinyglobby: 0.2.15
+       unrs-resolver: 1.11.1
+     optionalDependencies:
+-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.3.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.56.0)
++      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.3.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@8.56.0))(eslint@8.56.0))(eslint@8.56.0)
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -6267,7 +6270,7 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.3.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.56.0):
++  eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.3.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@8.56.0))(eslint@8.56.0))(eslint@8.56.0):
+     dependencies:
+       '@rtsao/scc': 1.1.0
+       array-includes: 3.1.9
+diff --git a/src/api/client.ts b/src/api/client.ts
+index f840673..e67dea6 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -463,6 +463,27 @@ export class APIClient {
+         };
+       }
+ 
++      // Check for authentication specific endpoints and simulate auth errors
++      if (endpoint.startsWith('/projects') ||
++          endpoint.startsWith('/roadmaps') ||
++          endpoint.startsWith('/chats') ||
++          endpoint.startsWith('/debug')) {
++        // Simulate different auth responses for testing
++        if (headers['Authorization'] === 'Bearer invalid-token') {
++          return {
++            status: 401,
++            data: { message: 'Invalid authentication token' },
++            headers: { 'content-type': 'application/json' }
++          };
++        } else if (!headers['Authorization']) {
++          return {
++            status: 401,
++            data: { message: 'Authentication required' },
++            headers: { 'content-type': 'application/json' }
++          };
++        }
++      }
++
+       // Default response for unhandled endpoints
+       return {
+         status: 404,
+@@ -486,63 +507,135 @@ export class APIClient {
+   // Specific project methods
+   async getProjects(): Promise<ListProjectsResponse> {
+     const response = await this.makeRequest('/projects', { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { projects: response.data.projects || [] },
+-      message: response.status === 200 ? 'Projects retrieved successfully' : 'Failed to retrieve projects',
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? 'Projects retrieved successfully'
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : 'Failed to retrieve projects'),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   async getProjectById(id: string): Promise<GetProjectResponse> {
+     const response = await this.makeRequest(`/projects/${id}`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { project: response.data.project || null },
+-      message: response.status === 200 ? `Project ${id} retrieved successfully` : `Failed to retrieve project ${id}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Project ${id} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : `Failed to retrieve project ${id}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   // Roadmap methods
+   async getRoadmaps(projectId: string): Promise<ListRoadmapsResponse> {
+     const response = await this.makeRequest(`/projects/${projectId}/roadmaps`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { roadmaps: response.data.roadmaps || [] },
+-      message: response.status === 200 ? `Roadmaps for project ${projectId} retrieved successfully` : `Failed to retrieve roadmaps for project ${projectId}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Roadmaps for project ${projectId} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : `Failed to retrieve roadmaps for project ${projectId}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   async getRoadmapById(roadmapId: string): Promise<GetRoadmapResponse> {
+     const response = await this.makeRequest(`/roadmaps/${roadmapId}`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { roadmap: response.data.roadmap || null },
+-      message: response.status === 200 ? `Roadmap ${roadmapId} retrieved successfully` : `Failed to retrieve roadmap ${roadmapId}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Roadmap ${roadmapId} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : `Failed to retrieve roadmap ${roadmapId}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   // Chat methods
+   async getChats(roadmapId: string): Promise<ListChatsResponse> {
+     const response = await this.makeRequest(`/roadmaps/${roadmapId}/chats`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { chats: response.data.chats || [] },
+-      message: response.status === 200 ? `Chats for roadmap ${roadmapId} retrieved successfully` : `Failed to retrieve chats for roadmap ${roadmapId}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Chats for roadmap ${roadmapId} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : `Failed to retrieve chats for roadmap ${roadmapId}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   async getChatById(chatId: string): Promise<GetChatResponse> {
+     const response = await this.makeRequest(`/chats/${chatId}`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { chat: response.data.chat || null },
+-      message: response.status === 200 ? `Chat ${chatId} retrieved successfully` : `Failed to retrieve chat ${chatId}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Chat ${chatId} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : `Failed to retrieve chat ${chatId}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+@@ -560,6 +653,7 @@ export class APIClient {
+ 
+     // Split the input text into words for streaming simulation
+     const words = text.split(' ');
++    let chunkIndex = 0;
+ 
+     for (const word of words) {
+       // Simulate delay between tokens
+@@ -567,7 +661,8 @@ export class APIClient {
+       yield {
+         event: 'token',
+         content: word + ' ',
+-        messageId: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
++        messageId: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
++        chunkIndex: chunkIndex++
+       };
+     }
+ 
+@@ -578,7 +673,8 @@ export class APIClient {
+     yield {
+       event: 'done',
+       content: '',
+-      messageId: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
++      messageId: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
++      chunkIndex: chunkIndex  // Final chunk index
+     };
+   }
+ 
+@@ -737,63 +833,135 @@ export class APIClient {
+   // Debug Process methods
+   async getProcesses(): Promise<ListProcessesResponse> {
+     const response = await this.makeRequest('/debug/processes', { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { processes: response.data.processes || [] },
+-      message: response.status === 200 ? 'Processes retrieved successfully' : 'Failed to retrieve processes',
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? 'Processes retrieved successfully'
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : 'Failed to retrieve processes'),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   async getProcessById(id: string): Promise<GetProcessResponse> {
+     const response = await this.makeRequest(`/debug/processes/${id}`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { process: response.data.process || null },
+-      message: response.status === 200 ? `Process ${id} retrieved successfully` : response.data.message || `Failed to retrieve process ${id}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Process ${id} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : response.data.message || `Failed to retrieve process ${id}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   // Debug WebSocket methods
+   async getWebSockets(): Promise<ListWebSocketsResponse> {
+     const response = await this.makeRequest('/debug/websockets', { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { websockets: response.data.websockets || [] },
+-      message: response.status === 200 ? 'WebSockets retrieved successfully' : 'Failed to retrieve WebSockets',
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? 'WebSockets retrieved successfully'
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : 'Failed to retrieve WebSockets'),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   async getWebSocketById(id: string): Promise<GetWebSocketResponse> {
+     const response = await this.makeRequest(`/debug/websockets/${id}`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { websocket: response.data.websocket || null },
+-      message: response.status === 200 ? `WebSocket ${id} retrieved successfully` : response.data.message || `Failed to retrieve WebSocket ${id}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `WebSocket ${id} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : response.data.message || `Failed to retrieve WebSocket ${id}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   // Debug Poll Session methods
+   async getPollSessions(): Promise<ListPollSessionsResponse> {
+     const response = await this.makeRequest('/debug/poll-sessions', { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { pollSessions: response.data.pollSessions || [] },
+-      message: response.status === 200 ? 'Poll sessions retrieved successfully' : 'Failed to retrieve poll sessions',
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? 'Poll sessions retrieved successfully'
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : 'Failed to retrieve poll sessions'),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+   async getPollSessionById(id: string): Promise<GetPollSessionResponse> {
+     const response = await this.makeRequest(`/debug/poll-sessions/${id}`, { method: 'GET', headers: {} });
++    const isAuthError = response.status === 401 || response.status === 403;
++
+     return {
+-      status: response.status === 200 ? 'ok' : 'error',
++      status: response.status === 200 ? 'ok' : (isAuthError ? 'auth_error' : 'error'),
+       data: { pollSession: response.data.pollSession || null },
+-      message: response.status === 200 ? `Poll session ${id} retrieved successfully` : response.data.message || `Failed to retrieve poll session ${id}`,
+-      errors: response.status === 200 ? [] : [{ message: response.data.message }]
++      message: response.status === 200
++        ? `Poll session ${id} retrieved successfully`
++        : (isAuthError
++          ? 'Authentication required or invalid token'
++          : response.data.message || `Failed to retrieve poll session ${id}`),
++      errors: response.status === 200
++        ? []
++        : [{
++          type: isAuthError ? 'AUTH_ERROR' : 'GENERAL_ERROR',
++          message: response.data.message,
++          code: response.status
++        }]
+     };
+   }
+ 
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 3006448..11b3a57 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -167,6 +167,7 @@ export interface AiTokenEvent {
+   event: 'token' | 'done' | 'error';
+   content?: string;
+   messageId?: string;
++  chunkIndex?: number;  // Index of this token chunk in the sequence
+   error?: string;
+ }
+ 
+diff --git a/src/commands/agent/chat/list.ts b/src/commands/agent/chat/list.ts
+index 371ba21..60ba3b5 100644
+--- a/src/commands/agent/chat/list.ts
++++ b/src/commands/agent/chat/list.ts
+@@ -31,10 +31,14 @@ export class ChatListHandler implements CommandHandler {
+ 
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve chats: ${response.message}`);
++      } else if (response.status === 'auth_error') {
++        // Handle authentication error specifically
++        throw new Error(`Authentication error: ${response.message}`);
+       }
+ 
+       return {
+-        chats: response.data.chats
++        chats: response.data.chats,
++        count: response.data.chats.length
+       };
+     } catch (error) {
+       throw new Error(`Failed to list chats: ${(error as Error).message}`);
+diff --git a/src/commands/agent/project/list.ts b/src/commands/agent/project/list.ts
+index 5d09597..17ffaf5 100644
+--- a/src/commands/agent/project/list.ts
++++ b/src/commands/agent/project/list.ts
+@@ -16,6 +16,9 @@ export class ProjectListHandler implements CommandHandler {
+ 
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve projects: ${response.message}`);
++      } else if (response.status === 'auth_error') {
++        // Handle authentication error specifically
++        throw new Error(`Authentication error: ${response.message}`);
+       }
+ 
+       // Filter projects if filter flag is provided
+@@ -34,7 +37,8 @@ export class ProjectListHandler implements CommandHandler {
+       }
+ 
+       return {
+-        projects
++        projects,
++        count: projects.length
+       };
+     } catch (error) {
+       throw new Error(`Failed to list projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
+diff --git a/src/commands/agent/roadmap/list.ts b/src/commands/agent/roadmap/list.ts
+index 7a169b8..8fff4ad 100644
+--- a/src/commands/agent/roadmap/list.ts
++++ b/src/commands/agent/roadmap/list.ts
+@@ -36,6 +36,9 @@ export class RoadmapListHandler implements CommandHandler {
+ 
+       if (response.status === 'error') {
+         throw new Error(`Failed to retrieve roadmaps: ${response.message}`);
++      } else if (response.status === 'auth_error') {
++        // Handle authentication error specifically
++        throw new Error(`Authentication error: ${response.message}`);
+       }
+ 
+       // Filter roadmaps if filter flag is provided
+@@ -62,7 +65,8 @@ export class RoadmapListHandler implements CommandHandler {
+       }
+ 
+       return {
+-        roadmaps
++        roadmaps,
++        count: roadmaps.length
+       };
+     } catch (error) {
+       throw new Error(`Failed to list roadmaps: ${(error as Error).message}`);
+diff --git a/src/commands/debug/poll/list.ts b/src/commands/debug/poll/list.ts
+index 048423e..7d8ae45 100644
+--- a/src/commands/debug/poll/list.ts
++++ b/src/commands/debug/poll/list.ts
+@@ -31,7 +31,7 @@ export class DebugPollListHandler {
+         status: 'error',
+         data: null,
+         message: 'Failed to retrieve poll sessions',
+-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
++        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+       };
+     }
+   }
+diff --git a/src/commands/debug/poll/view.ts b/src/commands/debug/poll/view.ts
+index befe5cc..78cfd5e 100644
+--- a/src/commands/debug/poll/view.ts
++++ b/src/commands/debug/poll/view.ts
+@@ -14,7 +14,7 @@ export class DebugPollViewHandler {
+         status: 'error',
+         data: null,
+         message: 'Missing required flag: --id',
+-        errors: [{ code: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
++        errors: [{ type: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
+       };
+     }
+ 
+@@ -37,7 +37,7 @@ export class DebugPollViewHandler {
+             status: 'error',
+             data: null,
+             message: `Poll session with id ${id} not found`,
+-            errors: [{ code: 'NOT_FOUND', id }]
++            errors: [{ type: 'NOT_FOUND', message: `Poll session with id ${id} not found`, details: { id } }]
+           };
+         } else {
+           // Return other errors as they are
+@@ -45,7 +45,11 @@ export class DebugPollViewHandler {
+             status: 'error',
+             data: null,
+             message: response.message,
+-            errors: response.errors
++            errors: response.errors.map((err: any) => ({
++              type: err.code || 'API_ERROR',
++              message: err.message || err,
++              details: err.details || {}
++            }))
+           };
+         }
+       }
+@@ -54,7 +58,7 @@ export class DebugPollViewHandler {
+         status: 'error',
+         data: null,
+         message: `Failed to retrieve poll session with id ${id}`,
+-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
++        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+       };
+     }
+   }
+@@ -64,23 +68,23 @@ export class DebugPollViewHandler {
+     if (!args.flags || !args.flags.id) {
+       return {
+         error: true,
+-        code: 'MISSING_REQUIRED_FLAG',
++        type: 'MISSING_REQUIRED_FLAG',
+         message: 'Missing required flag: --id',
+         details: {
+           command: 'debug.poll.view'
+         }
+       };
+     }
+-    
++
+     // Validate flags
+     const validFlags = ['id'];
+     const providedFlags = Object.keys(args.flags || {});
+-    
++
+     for (const flag of providedFlags) {
+       if (!validFlags.includes(flag)) {
+         return {
+           error: true,
+-          code: 'UNKNOWN_FLAG',
++          type: 'UNKNOWN_FLAG',
+           message: `Unknown flag: --${flag}`,
+           details: {
+             command: 'debug.poll.view',
+diff --git a/src/commands/debug/process/list.ts b/src/commands/debug/process/list.ts
+index c7a970d..6cdd700 100644
+--- a/src/commands/debug/process/list.ts
++++ b/src/commands/debug/process/list.ts
+@@ -31,7 +31,7 @@ export class DebugProcessListHandler {
+         status: 'error',
+         data: null,
+         message: 'Failed to retrieve processes',
+-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
++        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+       };
+     }
+   }
+diff --git a/src/commands/debug/process/view.ts b/src/commands/debug/process/view.ts
+index 9c0d584..5ed1261 100644
+--- a/src/commands/debug/process/view.ts
++++ b/src/commands/debug/process/view.ts
+@@ -14,7 +14,7 @@ export class DebugProcessViewHandler {
+         status: 'error',
+         data: null,
+         message: 'Missing required flag: --id',
+-        errors: [{ code: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
++        errors: [{ type: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
+       };
+     }
+ 
+@@ -37,7 +37,7 @@ export class DebugProcessViewHandler {
+             status: 'error',
+             data: null,
+             message: `Process with id ${id} not found`,
+-            errors: [{ code: 'NOT_FOUND', id }]
++            errors: [{ type: 'NOT_FOUND', message: `Process with id ${id} not found`, details: { id } }]
+           };
+         } else {
+           // Return other errors as they are
+@@ -45,7 +45,11 @@ export class DebugProcessViewHandler {
+             status: 'error',
+             data: null,
+             message: response.message,
+-            errors: response.errors
++            errors: response.errors.map((err: any) => ({
++              type: err.code || 'API_ERROR',
++              message: err.message || err,
++              details: err.details || {}
++            }))
+           };
+         }
+       }
+@@ -54,7 +58,7 @@ export class DebugProcessViewHandler {
+         status: 'error',
+         data: null,
+         message: `Failed to retrieve process with id ${id}`,
+-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
++        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+       };
+     }
+   }
+@@ -64,7 +68,7 @@ export class DebugProcessViewHandler {
+     if (!args.flags || !args.flags.id) {
+       return {
+         error: true,
+-        code: 'MISSING_REQUIRED_FLAG',
++        type: 'MISSING_REQUIRED_FLAG',
+         message: 'Missing required flag: --id',
+         details: {
+           command: 'debug.process.view'
+@@ -80,7 +84,7 @@ export class DebugProcessViewHandler {
+       if (!validFlags.includes(flag)) {
+         return {
+           error: true,
+-          code: 'UNKNOWN_FLAG',
++          type: 'UNKNOWN_FLAG',
+           message: `Unknown flag: --${flag}`,
+           details: {
+             command: 'debug.process.view',
+diff --git a/src/commands/debug/websocket/list.ts b/src/commands/debug/websocket/list.ts
+index e5702d1..4514bfd 100644
+--- a/src/commands/debug/websocket/list.ts
++++ b/src/commands/debug/websocket/list.ts
+@@ -31,7 +31,7 @@ export class DebugWebSocketListHandler {
+         status: 'error',
+         data: null,
+         message: 'Failed to retrieve websockets',
+-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
++        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+       };
+     }
+   }
+diff --git a/src/commands/debug/websocket/view.ts b/src/commands/debug/websocket/view.ts
+index 1c605c9..2983d0d 100644
+--- a/src/commands/debug/websocket/view.ts
++++ b/src/commands/debug/websocket/view.ts
+@@ -14,7 +14,7 @@ export class DebugWebSocketViewHandler {
+         status: 'error',
+         data: null,
+         message: 'Missing required flag: --id',
+-        errors: [{ code: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
++        errors: [{ type: 'MISSING_REQUIRED_FLAG', message: 'Missing required flag: --id' }]
+       };
+     }
+ 
+@@ -37,7 +37,7 @@ export class DebugWebSocketViewHandler {
+             status: 'error',
+             data: null,
+             message: `WebSocket with id ${id} not found`,
+-            errors: [{ code: 'NOT_FOUND', id }]
++            errors: [{ type: 'NOT_FOUND', message: `WebSocket with id ${id} not found`, details: { id } }]
+           };
+         } else {
+           // Return other errors as they are
+@@ -45,7 +45,11 @@ export class DebugWebSocketViewHandler {
+             status: 'error',
+             data: null,
+             message: response.message,
+-            errors: response.errors
++            errors: response.errors.map((err: any) => ({
++              type: err.code || 'API_ERROR',
++              message: err.message || err,
++              details: err.details || {}
++            }))
+           };
+         }
+       }
+@@ -54,7 +58,7 @@ export class DebugWebSocketViewHandler {
+         status: 'error',
+         data: null,
+         message: `Failed to retrieve websocket with id ${id}`,
+-        errors: [{ code: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
++        errors: [{ type: 'API_ERROR', message: error instanceof Error ? error.message : 'Unknown error' }]
+       };
+     }
+   }
+@@ -64,23 +68,23 @@ export class DebugWebSocketViewHandler {
+     if (!args.flags || !args.flags.id) {
+       return {
+         error: true,
+-        code: 'MISSING_REQUIRED_FLAG',
++        type: 'MISSING_REQUIRED_FLAG',
+         message: 'Missing required flag: --id',
+         details: {
+           command: 'debug.websocket.view'
+         }
+       };
+     }
+-    
++
+     // Validate flags
+     const validFlags = ['id'];
+     const providedFlags = Object.keys(args.flags || {});
+-    
++
+     for (const flag of providedFlags) {
+       if (!validFlags.includes(flag)) {
+         return {
+           error: true,
+-          code: 'UNKNOWN_FLAG',
++          type: 'UNKNOWN_FLAG',
+           message: `Unknown flag: --${flag}`,
+           details: {
+             command: 'debug.websocket.view',
+diff --git a/src/commands/index.ts b/src/commands/index.ts
+index dffe744..c67505a 100644
+--- a/src/commands/index.ts
++++ b/src/commands/index.ts
+@@ -9,9 +9,11 @@ import { ProjectCurrentHandler } from './agent/project/current';
+ import { RoadmapListHandler } from './agent/roadmap/list';
+ import { RoadmapViewHandler } from './agent/roadmap/view';
+ import { RoadmapSelectHandler } from './agent/roadmap/select';
++import { RoadmapCurrentHandler } from './agent/roadmap/current';
+ import { ChatListHandler } from './agent/chat/list';
+ import { ChatViewHandler } from './agent/chat/view';
+ import { ChatSelectHandler } from './agent/chat/select';
++import { ChatCurrentHandler } from './agent/chat/current';
+ 
+ // Settings commands
+ import { SettingsShowHandler } from './settings/show';
+@@ -70,11 +72,13 @@ export function registerCommandHandlers(): void {
+   handlerRegistry.register('agent.roadmap.list', new RoadmapListHandler());
+   handlerRegistry.register('agent.roadmap.view', new RoadmapViewHandler());
+   handlerRegistry.register('agent.roadmap.select', new RoadmapSelectHandler());
++  handlerRegistry.register('agent.roadmap.current', new RoadmapCurrentHandler());
+ 
+   // Agent chat commands
+   handlerRegistry.register('agent.chat.list', new ChatListHandler());
+   handlerRegistry.register('agent.chat.view', new ChatViewHandler());
+   handlerRegistry.register('agent.chat.select', new ChatSelectHandler());
++  handlerRegistry.register('agent.chat.current', new ChatCurrentHandler());
+ 
+   // Settings commands
+   handlerRegistry.register('settings.show', new SettingsShowHandler());
+diff --git a/src/commands/settings/show/index.ts b/src/commands/settings/show/index.ts
+index 2a5115d..fe2804c 100644
+--- a/src/commands/settings/show/index.ts
++++ b/src/commands/settings/show/index.ts
+@@ -15,12 +15,17 @@ export class SettingsShowHandler {
+         errors: []
+       };
+     } catch (error: any) {
++      // Determine if this is a config parsing error
++      const errorType = error instanceof SyntaxError || error.message.includes('JSON') || error.message.includes('parse')
++        ? 'CONFIG_PARSE_ERROR'
++        : 'CONFIG_LOAD_ERROR';
++
+       return {
+         status: 'error',
+         data: null,
+         message: error.message,
+         errors: [{
+-          type: 'CONFIG_LOAD_ERROR',
++          type: errorType,
+           message: error.message,
+           timestamp: new Date().toISOString()
+         }]
+diff --git a/src/commands/system/doctor.ts b/src/commands/system/doctor.ts
+index 09c9e84..1b3402d 100644
+--- a/src/commands/system/doctor.ts
++++ b/src/commands/system/doctor.ts
+@@ -12,6 +12,7 @@ interface DoctorCheck {
+   name: string;
+   status: 'ok' | 'warning' | 'error';
+   message?: string;
++  fixHint?: string;
+ }
+ 
+ export class SystemDoctorHandler implements CommandHandler {
+@@ -75,20 +76,31 @@ async function checkConfig(): Promise<DoctorCheck> {
+       return {
+         name: 'config',
+         status: 'error',
+-        message: 'Missing API base URL in configuration'
++        message: 'Missing API base URL in configuration',
++        fixHint: 'Run "nexus settings set --key apiBaseUrl --value <your-api-url>" to set the API base URL'
+       };
+     }
+-    
++
+     return {
+       name: 'config',
+       status: 'ok',
+-      message: 'Configuration loaded successfully'
++      message: 'Configuration loaded successfully',
++      fixHint: 'System configuration is valid'
+     };
+   } catch (error: any) {
++    // Check if this is a config parsing error
++    const isParseError = error instanceof SyntaxError || error.message.toLowerCase().includes('json') || error.message.toLowerCase().includes('parse');
++    const message = isParseError
++      ? `Configuration parsing error: ${error.message}`
++      : `Configuration error: ${error.message}`;
++
+     return {
+       name: 'config',
+       status: 'error',
+-      message: `Configuration error: ${error.message}`
++      message,
++      fixHint: isParseError
++        ? 'Configuration file syntax error. Check ~/.nexus/config.json for proper JSON formatting, or run "rm ~/.nexus/config.json" to reset configuration'
++        : 'Check your configuration file at ~/.nexus/config.json for syntax errors'
+     };
+   }
+ }
+@@ -111,20 +123,23 @@ async function checkAPIConnectivity(): Promise<DoctorCheck> {
+       return {
+         name: 'api',
+         status: 'ok',
+-        message: 'API connectivity established'
++        message: 'API connectivity established',
++        fixHint: 'API is accessible and responding correctly'
+       };
+     } else {
+       return {
+         name: 'api',
+         status: 'warning',
+-        message: `API returned status ${response.status}`
++        message: `API returned status ${response.status}`,
++        fixHint: `Check API server status, received HTTP ${response.status} response`
+       };
+     }
+   } catch (error: any) {
+     return {
+       name: 'api',
+       status: 'warning',
+-      message: `API connectivity failed: ${error.message}`
++      message: `API connectivity failed: ${error.message}`,
++      fixHint: 'Verify API server is running and accessible at the configured URL'
+     };
+   }
+ }
+@@ -137,10 +152,11 @@ async function checkAuthToken(): Promise<DoctorCheck> {
+       return {
+         name: 'auth',
+         status: 'warning',
+-        message: 'No authentication token set'
++        message: 'No authentication token set',
++        fixHint: 'Run "nexus auth login" to authenticate with the API server'
+       };
+     }
+-    
++
+     // Check if token is valid by attempting to decode it (basic check)
+     // JWT tokens have 3 parts separated by dots
+     const parts = config.authToken.split('.');
+@@ -148,10 +164,11 @@ async function checkAuthToken(): Promise<DoctorCheck> {
+       return {
+         name: 'auth',
+         status: 'error',
+-        message: 'Authentication token format is invalid'
++        message: 'Authentication token format is invalid',
++        fixHint: 'Re-authenticate using "nexus auth login" to get a valid token'
+       };
+     }
+-    
++
+     // Try to use the token with an API request
+     const client = new APIClient();
+     // Use one of the existing methods that would require authentication
+@@ -161,20 +178,23 @@ async function checkAuthToken(): Promise<DoctorCheck> {
+       return {
+         name: 'auth',
+         status: 'ok',
+-        message: 'Authentication token is valid'
++        message: 'Authentication token is valid',
++        fixHint: 'Authentication token is valid and working correctly'
+       };
+     } else {
+       return {
+         name: 'auth',
+         status: 'error',
+-        message: 'Authentication token appears to be invalid or expired'
++        message: 'Authentication token appears to be invalid or expired',
++        fixHint: 'Re-authenticate using "nexus auth login" to get a new token'
+       };
+     }
+   } catch (error: any) {
+     return {
+       name: 'auth',
+       status: 'error',
+-      message: `Authentication check failed: ${error.message}`
++      message: `Authentication check failed: ${error.message}`,
++      fixHint: 'Check authentication setup, run "nexus auth login" to authenticate'
+     };
+   }
+ }
+@@ -191,10 +211,11 @@ async function checkConfigFilePermissions(): Promise<DoctorCheck> {
+       return {
+         name: 'permissions',
+         status: 'error',
+-        message: 'Configuration directory does not exist or is not writable'
++        message: 'Configuration directory does not exist or is not writable',
++        fixHint: 'Create the directory ~/.nexus and ensure it is writable: "mkdir -p ~/.nexus && chmod 755 ~/.nexus"'
+       };
+     }
+-    
++
+     // Check if config file exists and is readable/writable
+     try {
+       await fs.access(configPath, fs.constants.F_OK | fs.constants.R_OK | fs.constants.W_OK);
+@@ -206,21 +227,24 @@ async function checkConfigFilePermissions(): Promise<DoctorCheck> {
+         return {
+           name: 'permissions',
+           status: 'error',
+-          message: 'Configuration file cannot be created in directory'
++          message: 'Configuration file cannot be created in directory',
++          fixHint: 'Check permissions on the ~/.nexus directory'
+         };
+       }
+     }
+-    
++
+     return {
+       name: 'permissions',
+       status: 'ok',
+-      message: 'Configuration file permissions are appropriate'
++      message: 'Configuration file permissions are appropriate',
++      fixHint: 'Configuration file permissions are correctly set'
+     };
+   } catch (error: any) {
+     return {
+       name: 'permissions',
+       status: 'error',
+-      message: `Permission check failed: ${error.message}`
++      message: `Permission check failed: ${error.message}`,
++      fixHint: 'Check file permissions for the ~/.nexus directory and configuration file'
+     };
+   }
+ }
+@@ -243,20 +267,23 @@ async function checkParity(): Promise<DoctorCheck> {
+       return {
+         name: 'parity',
+         status: 'ok',
+-        message: 'File system parity check passed'
++        message: 'File system parity check passed',
++        fixHint: 'File system read/write operations are working correctly'
+       };
+     } else {
+       return {
+         name: 'parity',
+         status: 'error',
+-        message: 'File system parity check failed - read/write inconsistency'
++        message: 'File system parity check failed - read/write inconsistency',
++        fixHint: 'Check disk space and file system for errors'
+       };
+     }
+   } catch (error: any) {
+     return {
+       name: 'parity',
+       status: 'error',
+-      message: `Parity check failed: ${error.message}`
++      message: `Parity check failed: ${error.message}`,
++      fixHint: 'Check disk space and file system for errors'
+     };
+   }
+ }
+\ No newline at end of file
+diff --git a/src/main.ts b/src/main.ts
+index 33e373d..fc66925 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -18,7 +18,8 @@ enum ExitCode {
+   ValidationError = 2,
+   MissingContext = 3,
+   APIError = 4,
+-  StreamingInterruption = 5
++  AuthError = 5,
++  StreamingInterruption = 6
+ }
+ 
+ async function main(): Promise<void> {
+@@ -63,6 +64,9 @@ async function main(): Promise<void> {
+             case 'API_ERROR':
+               exitCode = ExitCode.APIError;
+               break;
++            case 'AUTH_ERROR':
++              exitCode = ExitCode.AuthError;
++              break;
+             case 'STREAM_INTERRUPTED':
+               exitCode = ExitCode.StreamingInterruption;
+               break;
+diff --git a/src/manifest/cli-manifest.ts b/src/manifest/cli-manifest.ts
+index 4dfc52c..a3e9d5a 100644
+--- a/src/manifest/cli-manifest.ts
++++ b/src/manifest/cli-manifest.ts
+@@ -81,6 +81,15 @@ export const CLI_MANIFEST: CLICommandEntry[] = [
+     contextRequired: ['project'],
+     streaming: false
+   },
++  {
++    id: 'agent.roadmap.current',
++    path: ['agent', 'roadmap', 'current'],
++    description: 'Show the currently selected roadmap',
++    args: [],
++    flags: [],
++    contextRequired: ['project'],
++    streaming: false
++  },
+ 
+   // Agent chat commands
+   {
+@@ -110,6 +119,15 @@ export const CLI_MANIFEST: CLICommandEntry[] = [
+     contextRequired: ['project', 'roadmap'],
+     streaming: false
+   },
++  {
++    id: 'agent.chat.current',
++    path: ['agent', 'chat', 'current'],
++    description: 'Show the currently selected chat',
++    args: [],
++    flags: [],
++    contextRequired: ['project', 'roadmap'],
++    streaming: false
++  },
+ 
+   // Settings commands
+   {
+diff --git a/src/observability/types.ts b/src/observability/types.ts
+index 31256b2..db7d33a 100644
+--- a/src/observability/types.ts
++++ b/src/observability/types.ts
+@@ -5,4 +5,5 @@ export interface ObservabilityEvent {
+   event: string; // "token", "log", "frame", "poll", "status", "error", "end", ...
+   data?: any; // event payload
+   message?: string; // optional human-readable message
++  correlationId?: string; // optional identifier to correlate related events
+ }
+\ No newline at end of file
+diff --git a/src/observability/uol.ts b/src/observability/uol.ts
+index 40395da..4700871 100644
+--- a/src/observability/uol.ts
++++ b/src/observability/uol.ts
+@@ -1,4 +1,5 @@
+ import { ObservabilityEvent } from './types';
++import { v4 as uuidv4 } from 'uuid';
+ 
+ /**
+  * Creates a sequence counter closure that returns incrementing sequence numbers.
+@@ -16,7 +17,7 @@ export function normalizeEvent(
+   rawEvent: any
+ ): ObservabilityEvent {
+   const seqCounter = createSeqCounter();
+-  
++
+   return {
+     seq: seqCounter(),
+     timestamp: new Date().toISOString(),
+@@ -36,6 +37,7 @@ export async function* wrapAsyncGenerator<T>(
+   event?: string
+ ): AsyncGenerator<ObservabilityEvent> {
+   const getSequenceNumber = createSeqCounter();
++  const correlationId = uuidv4(); // Generate a single correlation ID for the entire stream
+ 
+   try {
+     for await (const rawEvent of generator) {
+@@ -45,6 +47,7 @@ export async function* wrapAsyncGenerator<T>(
+         source,
+         event: event || (typeof rawEvent === 'object' && rawEvent && (rawEvent as any).event) ? (rawEvent as any).event : 'data',
+         data: rawEvent,
++        correlationId,
+       };
+     }
+   } catch (error) {
+@@ -56,6 +59,7 @@ export async function* wrapAsyncGenerator<T>(
+         source,
+         event: 'interrupt',
+         message: 'Stream interrupted',
++        correlationId,
+       };
+     } else {
+       throw error; // Re-throw other errors
+diff --git a/src/parser/validator.ts b/src/parser/validator.ts
+index b9435de..2a937bc 100644
+--- a/src/parser/validator.ts
++++ b/src/parser/validator.ts
+@@ -181,6 +181,14 @@ const COMMAND_SPECS: CommandSpec[] = [
+     },
+     contextRequired: []
+   },
++  {
++    commandId: "agent.roadmap.current",
++    namespace: "agent",
++    segments: ["roadmap", "current"],
++    args: {},
++    flags: {},
++    contextRequired: ["activeProject"]
++  },
+   {
+     commandId: "agent.chat.list",
+     namespace: "agent",
+@@ -238,6 +246,14 @@ const COMMAND_SPECS: CommandSpec[] = [
+     },
+     contextRequired: []
+   },
++  {
++    commandId: "agent.chat.current",
++    namespace: "agent",
++    segments: ["chat", "current"],
++    args: {},
++    flags: {},
++    contextRequired: ["activeProject", "activeRoadmap"]
++  },
+   {
+     commandId: "agent.chat.send",
+     namespace: "agent",
+diff --git a/src/runtime/engine.ts b/src/runtime/engine.ts
+index 9bcb379..1332d41 100644
+--- a/src/runtime/engine.ts
++++ b/src/runtime/engine.ts
+@@ -81,7 +81,7 @@ export class RuntimeEngine {
+             data: null,
+             message: attachHintToError(errorType, errorMessage),
+             errors: [{
+-              type: 'MISSING_REQUIRED_CONTEXT',
++              type: errorType,
+               message: attachHintToError(errorType, `Command ${validated.commandId} requires ${requiredContext} context`),
+               details: { requiredContext, commandId: validated.commandId }
+             } as CommandError]
+diff --git a/src/runtime/types.ts b/src/runtime/types.ts
+index 338b427..05a6bc9 100644
+--- a/src/runtime/types.ts
++++ b/src/runtime/types.ts
+@@ -13,6 +13,8 @@ export interface ExecutionContext {
+ export interface ContextState {
+   activeProjectId?: string;
+   activeProjectName?: string;
++  activeProjectCategory?: string;
++  activeProjectStatus?: string;
+   activeRoadmapId?: string;
+   activeRoadmapTitle?: string;
+   activeChatId?: string;
+@@ -35,7 +37,7 @@ export interface Session {
+ export interface CommandResult {
+   status: 'ok' | 'error';
+   data: any;
+-  message: string;
++  message?: string;
+   errors: CommandError[];
+ }
+ 
+diff --git a/src/state/config-store.ts b/src/state/config-store.ts
+index 55b71f7..60e2622 100644
+--- a/src/state/config-store.ts
++++ b/src/state/config-store.ts
+@@ -79,6 +79,20 @@ export async function loadConfig(): Promise<Config> {
+       const defaultConfig = getDefaultConfig();
+       await saveConfig(defaultConfig);
+       return defaultConfig;
++    } else if (error instanceof SyntaxError) {
++      // JSON parsing error - config file is corrupted
++      console.error(`Config file corrupted: ${error.message}`);
++      // Return default config but log the issue
++      const defaultConfig = getDefaultConfig();
++      // Try to backup the corrupted config
++      try {
++        const backupPath = configPath + '.backup';
++        await fs.copyFile(configPath, backupPath);
++        console.error(`Corrupted config backed up to: ${backupPath}`);
++      } catch (backupError) {
++        console.error(`Failed to backup corrupted config: ${backupError.message}`);
++      }
++      return defaultConfig;
+     } else {
+       // Other error occurred, log and return defaults
+       console.error(`Error reading config file: ${error.message}`);
+diff --git a/src/utils/formatters.ts b/src/utils/formatters.ts
+index 7dce5f1..b7bc5b0 100644
+--- a/src/utils/formatters.ts
++++ b/src/utils/formatters.ts
+@@ -46,7 +46,28 @@ function loadConfigSync(): any {
+ 
+     if (fs.existsSync(configPath)) {
+       const configContent = fs.readFileSync(configPath, 'utf-8');
+-      return JSON.parse(configContent);
++      try {
++        return JSON.parse(configContent);
++      } catch (parseError) {
++        // Log the parsing error for debugging
++        console.error(`Config file corrupted: ${parseError.message}`);
++        console.error(`Config path: ${configPath}`);
++
++        // Try to backup the corrupted config
++        try {
++          const backupPath = configPath + '.backup';
++          fs.copyFileSync(configPath, backupPath);
++          console.error(`Corrupted config backed up to: ${backupPath}`);
++        } catch (backupError) {
++          console.error(`Failed to backup corrupted config: ${backupError.message}`);
++        }
++
++        // Return default config
++        return {
++          outputMode: 'pretty',
++          showBanner: true
++        };
++      }
+     } else {
+       // Return default config if file doesn't exist
+       return {
+diff --git a/src/utils/hints.ts b/src/utils/hints.ts
+index 865a243..cd4c1c3 100644
+--- a/src/utils/hints.ts
++++ b/src/utils/hints.ts
+@@ -34,6 +34,14 @@ export const hints: Hint[] = [
+   {
+     errorType: 'MISSING_AI_SESSION_CONTEXT',
+     message: "Tip: Use 'nexus ai session create' to start an AI session."
++  },
++  {
++    errorType: 'CONFIG_PARSE_ERROR',
++    message: "Configuration file is corrupted. Run 'rm ~/.nexus/config.json' to reset configuration, or manually fix the JSON syntax in the config file."
++  },
++  {
++    errorType: 'AUTH_ERROR',
++    message: "Authentication required or token invalid. Run 'nexus auth login' to authenticate or check your credentials."
+   }
+ ];
+ 
+diff --git a/src/utils/parity-check.ts b/src/utils/parity-check.ts
+index 1a22c14..c4ac266 100644
+--- a/src/utils/parity-check.ts
++++ b/src/utils/parity-check.ts
+@@ -97,9 +97,11 @@ export const checkParity = (): { status: string; errors: number; warnings: numbe
+     'agent.roadmap.list',
+     'agent.roadmap.view',
+     'agent.roadmap.select',
++    'agent.roadmap.current',
+     'agent.chat.list',
+     'agent.chat.view',
+     'agent.chat.select',
++    'agent.chat.current',
+     'settings.show',
+     'settings.set',
+     'settings.reset',

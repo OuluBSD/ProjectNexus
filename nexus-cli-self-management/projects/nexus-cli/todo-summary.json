@@ -1,7 +1,9 @@
 {
-  "project": "Nexus CLI",
+  "project": "Nexus CLI Developer Project",
   "roadmap": "AI usability polish",
   "chat": "AI self-feedback loop",
+  "initiator": "Nexus AI Agent",
+  "initiatorText": "Updated Initiator Text for Nexus CLI Developer Project - Comprehensive task list for AI consumption",
   "todoItems": [
     {
       "id": "nexus-cli-todo-001",

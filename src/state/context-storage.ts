@@ -2,6 +2,8 @@
 // Context storage implementation
 
 import { ContextState } from './context-types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class ContextStorage {
   private memoryContext: ContextState = {
@@ -15,13 +17,53 @@ export class ContextStorage {
     selectedNetworkElementId: undefined,
     lastUpdate: new Date().toISOString()
   };
+  private readonly contextFilePath: string;
+
+  constructor() {
+    // Get home directory and create a .nexus directory for config
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
+    const nexusDir = path.join(homeDir, '.nexus');
+
+    // Ensure the directory exists
+    if (!fs.existsSync(nexusDir)) {
+      fs.mkdirSync(nexusDir, { recursive: true });
+    }
+
+    this.contextFilePath = path.join(nexusDir, 'context.json');
+
+    // Try to load context from file if it exists
+    this.loadFromFile();
+  }
+
+  private loadFromFile(): void {
+    try {
+      if (fs.existsSync(this.contextFilePath)) {
+        const fileContent = fs.readFileSync(this.contextFilePath, 'utf8');
+        const context = JSON.parse(fileContent);
+        this.memoryContext = { ...this.memoryContext, ...context };
+      }
+    } catch (error) {
+      console.error('Failed to load context from file:', error);
+      // Continue with default context if file is corrupted
+    }
+  }
+
+  private saveToFile(): void {
+    try {
+      fs.writeFileSync(this.contextFilePath, JSON.stringify(this.memoryContext, null, 2));
+    } catch (error) {
+      console.error('Failed to save context to file:', error);
+    }
+  }
 
   async read(): Promise<ContextState> {
+    this.loadFromFile(); // Refresh from file to ensure latest
     return { ...this.memoryContext };
   }
 
   async write(context: ContextState): Promise<void> {
     this.memoryContext = { ...context, lastUpdate: new Date().toISOString() };
+    this.saveToFile();
   }
 
   // Helper method to update only specific fields
@@ -31,6 +73,7 @@ export class ContextStorage {
       ...updates,
       lastUpdate: new Date().toISOString()
     };
+    this.saveToFile();
   }
 
   // Clear dependent selections when parent context changes

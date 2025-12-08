@@ -2,18 +2,22 @@
 // Command handlers registration
 
 import { handlerRegistry } from '../runtime/handler-registry';
+import { ProjectCreateHandler } from './agent/project/create';
 import { ProjectListHandler } from './agent/project/list';
 import { ProjectViewHandler } from './agent/project/view';
 import { ProjectSelectHandler } from './agent/project/select';
 import { ProjectCurrentHandler } from './agent/project/current';
+import { RoadmapCreateHandler } from './agent/roadmap/create';
 import { RoadmapListHandler } from './agent/roadmap/list';
 import { RoadmapViewHandler } from './agent/roadmap/view';
 import { RoadmapSelectHandler } from './agent/roadmap/select';
 import { RoadmapCurrentHandler } from './agent/roadmap/current';
+import { ChatCreateHandler } from './agent/chat/create';
 import { ChatListHandler } from './agent/chat/list';
 import { ChatViewHandler } from './agent/chat/view';
 import { ChatSelectHandler } from './agent/chat/select';
 import { ChatCurrentHandler } from './agent/chat/current';
+import { AgentChatSendHandler } from './agent/chat/send';
 
 // Settings commands
 import { SettingsShowHandler } from './settings/show';
@@ -63,22 +67,26 @@ import { SystemDoctorHandler } from './system/doctor';
 // Register all command handlers
 export function registerCommandHandlers(): void {
   // Agent project commands
+  handlerRegistry.register('agent.project.create', new ProjectCreateHandler());
   handlerRegistry.register('agent.project.list', new ProjectListHandler());
   handlerRegistry.register('agent.project.view', new ProjectViewHandler());
   handlerRegistry.register('agent.project.select', new ProjectSelectHandler());
   handlerRegistry.register('agent.project.current', new ProjectCurrentHandler());
 
   // Agent roadmap commands
+  handlerRegistry.register('agent.roadmap.create', new RoadmapCreateHandler());
   handlerRegistry.register('agent.roadmap.list', new RoadmapListHandler());
   handlerRegistry.register('agent.roadmap.view', new RoadmapViewHandler());
   handlerRegistry.register('agent.roadmap.select', new RoadmapSelectHandler());
   handlerRegistry.register('agent.roadmap.current', new RoadmapCurrentHandler());
 
   // Agent chat commands
+  handlerRegistry.register('agent.chat.create', new ChatCreateHandler());
   handlerRegistry.register('agent.chat.list', new ChatListHandler());
   handlerRegistry.register('agent.chat.view', new ChatViewHandler());
   handlerRegistry.register('agent.chat.select', new ChatSelectHandler());
   handlerRegistry.register('agent.chat.current', new ChatCurrentHandler());
+  handlerRegistry.register('agent.chat.send', new AgentChatSendHandler());
 
   // Settings commands
   handlerRegistry.register('settings.show', new SettingsShowHandler());

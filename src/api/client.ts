@@ -1,8 +1,38 @@
 // src/api/client.ts
 // API client implementation
 
-import { APIRequestOptions, APIResponse, ProjectSummary, ProjectDetails, ListProjectsResponse, GetProjectResponse, RoadmapSummary, RoadmapDetails, ListRoadmapsResponse, GetRoadmapResponse, ChatSummary, ChatDetails, ListChatsResponse, GetChatResponse, AiTokenEvent, ListNetworkElementsResponse, GetNetworkElementResponse, GetNetworkStatusResponse, NetworkElementSummary, NetworkElementDetails, NetworkStatusSnapshot, ConnectionInfo, ListProcessesResponse, GetProcessResponse, ListWebSocketsResponse, GetWebSocketResponse, ListPollSessionsResponse, GetPollSessionResponse } from './types';
+import { APIRequestOptions, APIResponse, ProjectSummary, ProjectDetails, ListProjectsResponse, GetProjectResponse, RoadmapSummary, RoadmapDetails, ListRoadmapsResponse, GetRoadmapResponse, ChatSummary, ChatDetails, ListChatsResponse, GetChatResponse, AiTokenEvent, ListNetworkElementsResponse, GetNetworkElementResponse, GetNetworkStatusResponse, NetworkElementSummary, NetworkElementDetails, NetworkStatusSnapshot, ConnectionInfo, ListProcessesResponse, GetProcessResponse, ListWebSocketsResponse, GetWebSocketResponse, ListPollSessionsResponse, GetPollSessionResponse, CreateProjectResponse, CreateRoadmapResponse, CreateChatResponse } from './types';
 import { loadConfig } from '../state/config-store';
+
+// Static in-memory store for mock data (persists across API client instances)
+let staticProjects: ProjectDetails[] = [
+  {
+    id: 'proj-1',
+    name: 'Sample Project 1',
+    category: 'Web Development',
+    status: 'active',
+    description: 'A sample project to demonstrate functionality',
+    info: 'Additional project information',
+    theme: { primary: '#007acc' },
+    contentPath: '/path/to/project1',
+    gitUrl: 'https://github.com/example/project1.git',
+    roadmapLists: []
+  },
+  {
+    id: 'proj-2',
+    name: 'Sample Project 2',
+    category: 'Mobile Development',
+    status: 'archived',
+    description: 'Another sample project',
+    info: 'More project info',
+    theme: { primary: '#ff6b35' },
+    contentPath: '/path/to/project2',
+    gitUrl: 'https://github.com/example/project2.git',
+    roadmapLists: []
+  }
+];
+let staticRoadmaps: RoadmapDetails[] = [];
+let staticChats: ChatDetails[] = [];
 
 export class APIClient {
   private baseURL: string;
@@ -394,6 +424,148 @@ export class APIClient {
         return {
           status: 200,
           data: { websocket: mockWebSocket },
+          headers: { 'content-type': 'application/json' }
+        };
+      } else if (endpoint === '/projects' && method === 'POST') {
+        // Mock response for creating a project
+        const { name, category, description, status } = body || {};
+        const newProjectId = `proj-${Date.now()}`;
+
+        const newProject: ProjectDetails = {
+          id: newProjectId,
+          name: name || 'New Project',
+          category: category || 'General',
+          status: status || 'active',
+          description: description || 'A new project',
+          info: 'Detailed project information',
+          theme: { primary: '#1a73e8' },
+          contentPath: `/path/to/project/${newProjectId}`,
+          gitUrl: `https://github.com/example/${name?.replace(/\s+/g, '-').toLowerCase() || 'new-project'}.git`,
+          roadmapLists: []
+        };
+
+        // Add to static in-memory store
+        staticProjects.push(newProject);
+
+        return {
+          status: 200,
+          data: { project: newProject },
+          headers: { 'content-type': 'application/json' }
+        };
+      } else if (endpoint === '/projects' && method === 'GET') {
+        // This is the updated GET /projects endpoint
+        // Return projects from the static in-memory store
+        const projects = staticProjects.map(project => ({
+          id: project.id,
+          name: project.name,
+          category: project.category,
+          status: project.status,
+          description: project.description,
+          info: project.info,
+          theme: project.theme,
+          contentPath: project.contentPath,
+          gitUrl: project.gitUrl
+        } as ProjectSummary));
+
+        return {
+          status: 200,
+          data: { projects: projects },
+          headers: { 'content-type': 'application/json' }
+        };
+      } else if (endpoint === '/roadmaps' && method === 'POST') {
+        // Mock response for creating a roadmap
+        const { name, description, projectId } = body || {};
+        const newRoadmapId = `rm-${Date.now()}`;
+
+        const newRoadmap: RoadmapDetails = {
+          id: newRoadmapId,
+          title: name || 'New Roadmap',
+          status: 'planned',
+          progress: 0,
+          tags: ['initial'],
+          summary: description || 'A new roadmap',
+          metaStatus: 'planned',
+          metaProgress: 0,
+          metaSummary: 'New roadmap created',
+          projectRef: projectId
+        };
+
+        // Add to static in-memory store
+        staticRoadmaps.push(newRoadmap);
+
+        return {
+          status: 200,
+          data: { roadmap: newRoadmap },
+          headers: { 'content-type': 'application/json' }
+        };
+      } else if (endpoint.startsWith('/projects/') && endpoint.includes('/roadmaps') && method === 'GET') {
+        // Check if this is getting roadmaps for a project
+        const projectId = endpoint.split('/')[2]; // Extract project ID from /projects/{id}/roadmaps
+
+        // Filter roadmaps for the given project from static store
+        const projectRoadmaps = staticRoadmaps.filter(roadmap => roadmap.projectRef === projectId);
+
+        const roadmapSummaries = projectRoadmaps.map(roadmap => ({
+          id: roadmap.id,
+          title: roadmap.title,
+          status: roadmap.status,
+          progress: roadmap.progress,
+          tags: roadmap.tags,
+          summary: roadmap.summary,
+          metaStatus: roadmap.metaStatus,
+          metaProgress: roadmap.metaProgress,
+          metaSummary: roadmap.metaSummary,
+          projectRef: roadmap.projectRef
+        } as RoadmapSummary));
+
+        return {
+          status: 200,
+          data: { roadmaps: roadmapSummaries },
+          headers: { 'content-type': 'application/json' }
+        };
+      } else if (endpoint === '/chats' && method === 'POST') {
+        // Mock response for creating a chat
+        const { name, description, roadmapId } = body || {};
+        const newChatId = `chat-${Date.now()}`;
+
+        const newChat: ChatDetails = {
+          id: newChatId,
+          title: name || 'New Chat',
+          status: 'active',
+          progress: 0,
+          note: description || 'A new chat',
+          meta: false,
+          messages: [],
+          roadmapRef: roadmapId
+        };
+
+        // Add to static in-memory store
+        staticChats.push(newChat);
+
+        return {
+          status: 200,
+          data: { chat: newChat },
+          headers: { 'content-type': 'application/json' }
+        };
+      } else if (endpoint.startsWith('/roadmaps/') && endpoint.includes('/chats') && method === 'GET') {
+        // Check if this is getting chats for a roadmap
+        const roadmapId = endpoint.split('/')[2]; // Extract roadmap ID from /roadmaps/{id}/chats
+
+        // Filter chats for the given roadmap from static store
+        const roadmapChats = staticChats.filter(chat => chat.roadmapRef === roadmapId);
+
+        const chatSummaries = roadmapChats.map(chat => ({
+          id: chat.id,
+          title: chat.title,
+          status: chat.status,
+          progress: chat.progress,
+          note: chat.note,
+          meta: chat.meta
+        } as ChatSummary));
+
+        return {
+          status: 200,
+          data: { chats: chatSummaries },
           headers: { 'content-type': 'application/json' }
         };
       } else if (endpoint === '/debug/poll-sessions' && method === 'GET') {
@@ -996,6 +1168,153 @@ export class APIClient {
           code: response.status
         }]
     };
+  }
+
+  // Create project method
+  async createProject(projectData: { name: string; category: string; description: string; status: string }): Promise<CreateProjectResponse> {
+    const response = await this.makeRequest('/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: projectData
+    });
+
+    const isAuthError = response.status === 401 || response.status === 403;
+    const authErrorType = this.determineAuthErrorType(response);
+
+    // Generate a mock project ID for the new project
+    const mockProjectId = `proj-${Date.now()}`;
+
+    // Create response based on the API response
+    if (response.status === 200) {
+      // If the API returned a project, use that; otherwise create a mock one
+      const project = response.data.project || {
+        id: mockProjectId,
+        name: projectData.name,
+        category: projectData.category,
+        status: projectData.status,
+        description: projectData.description,
+        info: 'Detailed project information',
+        theme: { primary: '#1a73e8' },
+        contentPath: `/path/to/project/${mockProjectId}`,
+        gitUrl: `https://github.com/example/${projectData.name.replace(/\s+/g, '-').toLowerCase()}.git`
+      };
+
+      return {
+        status: 'ok',
+        data: { project },
+        message: `Project "${projectData.name}" created successfully with ID: ${project.id}`,
+        errors: []
+      };
+    } else {
+      return {
+        status: isAuthError ? 'auth_error' : 'error',
+        data: { project: response.data.project || null },
+        message: response.data.message || `Failed to create project: ${projectData.name}`,
+        errors: [{
+          type: isAuthError ? authErrorType : 'GENERAL_ERROR',
+          message: response.data.message || 'Failed to create project',
+          code: response.status
+        }]
+      };
+    }
+  }
+
+  // Create roadmap method
+  async createRoadmap(roadmapData: { name: string; description: string; projectId: string }): Promise<CreateRoadmapResponse> {
+    const response = await this.makeRequest('/roadmaps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: roadmapData
+    });
+
+    const isAuthError = response.status === 401 || response.status === 403;
+    const authErrorType = this.determineAuthErrorType(response);
+
+    // Generate a mock roadmap ID for the new roadmap
+    const mockRoadmapId = `rm-${Date.now()}`;
+
+    // Create response based on the API response
+    if (response.status === 200) {
+      // If the API returned a roadmap, use that; otherwise create a mock one
+      const roadmap = response.data.roadmap || {
+        id: mockRoadmapId,
+        title: roadmapData.name,
+        status: 'planned',
+        progress: 0,
+        tags: ['initial'],
+        summary: roadmapData.description,
+        metaStatus: 'planned',
+        metaProgress: 0,
+        metaSummary: 'New roadmap created',
+        projectRef: roadmapData.projectId
+      };
+
+      return {
+        status: 'ok',
+        data: { roadmap },
+        message: `Roadmap "${roadmapData.name}" created successfully with ID: ${roadmap.id}`,
+        errors: []
+      };
+    } else {
+      return {
+        status: isAuthError ? 'auth_error' : 'error',
+        data: { roadmap: response.data.roadmap || null },
+        message: response.data.message || `Failed to create roadmap: ${roadmapData.name}`,
+        errors: [{
+          type: isAuthError ? authErrorType : 'GENERAL_ERROR',
+          message: response.data.message || 'Failed to create roadmap',
+          code: response.status
+        }]
+      };
+    }
+  }
+
+  // Create chat method
+  async createChat(chatData: { name: string; description: string; roadmapId: string }): Promise<CreateChatResponse> {
+    const response = await this.makeRequest('/chats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: chatData
+    });
+
+    const isAuthError = response.status === 401 || response.status === 403;
+    const authErrorType = this.determineAuthErrorType(response);
+
+    // Generate a mock chat ID for the new chat
+    const mockChatId = `chat-${Date.now()}`;
+
+    // Create response based on the API response
+    if (response.status === 200) {
+      // If the API returned a chat, use that; otherwise create a mock one
+      const chat = response.data.chat || {
+        id: mockChatId,
+        title: chatData.name,
+        status: 'active',
+        progress: 0,
+        note: chatData.description,
+        meta: false,
+        messages: [],
+        roadmapRef: chatData.roadmapId
+      };
+
+      return {
+        status: 'ok',
+        data: { chat },
+        message: `Chat "${chatData.name}" created successfully with ID: ${chat.id}`,
+        errors: []
+      };
+    } else {
+      return {
+        status: isAuthError ? 'auth_error' : 'error',
+        data: { chat: response.data.chat || null },
+        message: response.data.message || `Failed to create chat: ${chatData.name}`,
+        errors: [{
+          type: isAuthError ? authErrorType : 'GENERAL_ERROR',
+          message: response.data.message || 'Failed to create chat',
+          code: response.status
+        }]
+      };
+    }
   }
 
   // Streaming debug events

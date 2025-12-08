@@ -18,7 +18,7 @@ import { ChatListHandler } from './chat/list';
 import { ChatCreateHandler } from './chat/create';
 import { ChatViewHandler } from './chat/view';
 import { ChatUpdateHandler } from './chat/update';
-import { ChatSendHandler } from './chat/send';
+import { AgentChatSendHandler } from './chat/send';
 import { ChatSelectHandler } from './chat/select';
 
 import { FileBrowseHandler } from './file/browse';
@@ -54,7 +54,7 @@ export const agentCommands = {
     create: new ChatCreateHandler(),
     view: new ChatViewHandler(),
     update: new ChatUpdateHandler(),
-    send: new ChatSendHandler(),
+    send: new AgentChatSendHandler(),
     select: new ChatSelectHandler(),
   },
   file: {

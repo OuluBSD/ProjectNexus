@@ -382,6 +382,34 @@ export interface ListPollSessionsResponse {
   errors: any[];
 }
 
+// Create operation response types
+export interface CreateProjectResponse {
+  status: string;
+  data: {
+    project: ProjectDetails;
+  };
+  message: string;
+  errors: any[];
+}
+
+export interface CreateRoadmapResponse {
+  status: string;
+  data: {
+    roadmap: RoadmapDetails;
+  };
+  message: string;
+  errors: any[];
+}
+
+export interface CreateChatResponse {
+  status: string;
+  data: {
+    chat: ChatDetails;
+  };
+  message: string;
+  errors: any[];
+}
+
 export interface GetPollSessionResponse {
   status: string;
   data: {

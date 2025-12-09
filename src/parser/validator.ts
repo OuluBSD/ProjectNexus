@@ -195,6 +195,7 @@ const COMMAND_SPECS: CommandSpec[] = [
     segments: ["chat", "list"],
     args: {},
     flags: {
+      "type": { type: "string", required: false, description: "Filter chats by type (regular or meta)" },
       "roadmap-id": { type: "string", required: false, description: "Override the active roadmap selection" }
     },
     contextRequired: ["activeRoadmap"]
@@ -206,6 +207,7 @@ const COMMAND_SPECS: CommandSpec[] = [
     args: {},
     flags: {
       "title": { type: "string", required: true, description: "Chat title" },
+      "type": { type: "string", required: false, description: "Chat type (regular or meta)", default: "regular" },
       "note": { type: "string", required: false, description: "Optional chat note" },
       "roadmap-id": { type: "string", required: false, description: "Override the active roadmap selection" }
     },
@@ -260,11 +262,27 @@ const COMMAND_SPECS: CommandSpec[] = [
     segments: ["chat", "send"],
     args: {},
     flags: {
-      "message": { type: "string", required: true, description: "Message content to send" },
+      "message": { type: "string", required: false, description: "Message content to send", alternatives: ["stdin", "file"] },
+      "stdin": { type: "boolean", required: false, description: "Read message content from stdin", alternatives: ["message", "file"] },
+      "file": { type: "string", required: false, description: "Read message content from file", alternatives: ["message", "stdin"] },
       "chat-id": { type: "string", required: false, description: "Override the active chat selection" },
       "role": { type: "string", required: false, description: "Message role (user, assistant, system)", default: "user" }
     },
-    contextRequired: ["activeChat"]
+    contextRequired: ["activeChat"],
+    mutuallyExclusive: [["message", "stdin", "file"]]
+  },
+  {
+    commandId: "agent.chat.run-command",
+    namespace: "agent",
+    segments: ["chat", "run-command"],
+    args: {},
+    flags: {
+      "command": { type: "string", required: true, description: "Command to execute in the project directory" },
+      "chat-id": { type: "string", required: false, description: "Override the active chat selection" },
+      "project-id": { type: "string", required: false, description: "Override the active project selection" },
+      "cwd": { type: "string", required: false, description: "Working directory for command execution (relative to project root)" }
+    },
+    contextRequired: ["activeChat", "activeProject"]
   },
   {
     commandId: "agent.file.browse",
@@ -435,10 +453,13 @@ const COMMAND_SPECS: CommandSpec[] = [
     segments: ["message", "send"],
     args: {},
     flags: {
-      "text": { type: "string", required: true, description: "Message content to send" },
+      "text": { type: "string", required: false, description: "Message content to send", alternatives: ["stdin", "file"] },
+      "stdin": { type: "boolean", required: false, description: "Read message content from stdin", alternatives: ["text", "file"] },
+      "file": { type: "string", required: false, description: "Read message content from file", alternatives: ["text", "stdin"] },
       "session-id": { type: "string", required: false, description: "Override the active session selection" }
     },
-    contextRequired: ["activeAiSession"]
+    contextRequired: ["activeAiSession"],
+    mutuallyExclusive: [["text", "stdin", "file"]]
   },
   {
     commandId: "ai.message.list",
@@ -1025,6 +1046,27 @@ const COMMAND_SPECS: CommandSpec[] = [
     args: {},
     flags: {},
     contextRequired: []
+  },
+  {
+    commandId: "system.chat-smoke",
+    namespace: "system",
+    segments: ["chat-smoke"],
+    args: {},
+    flags: {},
+    contextRequired: []
+  },
+  {
+    commandId: "system.chat-qwen-probe",
+    namespace: "system",
+    segments: ["chat-qwen-probe"],
+    args: {},
+    flags: {
+      "project-id": { type: "string", required: false, description: "Project ID (overrides active project)" },
+      "project-path": { type: "string", required: false, description: "Absolute path to project (overrides active project)" },
+      "run-id": { type: "string", required: true, description: "Unique run identifier for the probe operation" },
+      "file-name": { type: "string", required: false, description: "Custom filename for the probe file" }
+    },
+    contextRequired: ["activeProject"]
   }
 ];
 

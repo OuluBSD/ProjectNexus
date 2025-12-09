@@ -18,6 +18,7 @@ import { ChatViewHandler } from './agent/chat/view';
 import { ChatSelectHandler } from './agent/chat/select';
 import { ChatCurrentHandler } from './agent/chat/current';
 import { AgentChatSendHandler } from './agent/chat/send';
+import { ChatRunCommandHandler } from './agent/chat/run-command';
 
 // Settings commands
 import { SettingsShowHandler } from './settings/show';
@@ -48,6 +49,10 @@ import { DebugProcessLogsHandler } from './debug/process/logs';
 import { DebugLogTailHandler } from './debug/log/tail';
 import { DebugLogViewHandler } from './debug/log/view';
 import { DebugLogSearchHandler } from './debug/log/search';
+
+// System commands
+import { SystemChatSmokeHandler } from './system/chat-smoke';
+import { SystemChatQwenProbeHandler } from './system/chat-qwen-probe';
 
 import { DebugWebSocketListHandler } from './debug/websocket/list';
 import { DebugWebSocketViewHandler } from './debug/websocket/view';
@@ -87,6 +92,7 @@ export function registerCommandHandlers(): void {
   handlerRegistry.register('agent.chat.select', new ChatSelectHandler());
   handlerRegistry.register('agent.chat.current', new ChatCurrentHandler());
   handlerRegistry.register('agent.chat.send', new AgentChatSendHandler());
+  handlerRegistry.register('agent.chat.run-command', new ChatRunCommandHandler());
 
   // Settings commands
   handlerRegistry.register('settings.show', new SettingsShowHandler());
@@ -135,6 +141,8 @@ export function registerCommandHandlers(): void {
   handlerRegistry.register('system.version', new SystemVersionHandler());
   handlerRegistry.register('system.completion', new SystemCompletionHandler());
   handlerRegistry.register('system.doctor', new SystemDoctorHandler());
+  handlerRegistry.register('system.chat-smoke', new SystemChatSmokeHandler());
+  handlerRegistry.register('system.chat-qwen-probe', new SystemChatQwenProbeHandler());
 
   // Add more handlers as they are implemented
 }

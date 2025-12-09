@@ -492,5 +492,19 @@ export const CLI_MANIFEST: CLICommandEntry[] = [
     flags: [],
     contextRequired: [],
     streaming: false
+  },
+  {
+    id: 'system.chat-qwen-probe',
+    path: ['system', 'chat-qwen-probe'],
+    description: 'Execute Qwen file probe to verify backend functionality',
+    args: [],
+    flags: [
+      { name: 'project-id', required: false, type: 'string' },
+      { name: 'project-path', required: false, type: 'string' },
+      { name: 'run-id', required: true, type: 'string' },
+      { name: 'file-name', required: false, type: 'string' }
+    ],
+    contextRequired: ['project'],
+    streaming: false
   }
 ];

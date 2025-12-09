@@ -12,6 +12,8 @@ import { aiChatPollingRoutes } from "./ai-chat-polling";
 import { serverRoutes } from "./servers";
 import { debugRoutes } from "./debug";
 import { userSettingsRoutes } from "./user-settings";
+import { commandExecutionRoutes } from "./command-execution";
+import { qwenProbeRoutes } from "./qwen-probe";
 
 export const registerRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(authRoutes, { prefix: "/auth" });
@@ -27,4 +29,6 @@ export const registerRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(serverRoutes);
   await fastify.register(userSettingsRoutes);
   await fastify.register(debugRoutes);
+  await fastify.register(commandExecutionRoutes);
+  await fastify.register(qwenProbeRoutes);
 };

@@ -623,6 +623,45 @@ export class APIClient {
           data: { pollSession: mockPollSession },
           headers: { 'content-type': 'application/json' }
         };
+      } else if (endpoint === '/ai/qwen/probe-file' && method === 'POST') {
+        // Mock response for the Qwen probe file operation
+        const { projectPath, runId, fileName = '.nexus-qwen-probe-ok.txt' } = body || {};
+
+        if (!runId) {
+          return {
+            status: 400,
+            data: {
+              message: 'Missing required field: runId',
+              error: 'MISSING_REQUIRED_FIELD'
+            },
+            headers: { 'content-type': 'application/json' }
+          };
+        }
+
+        if (!projectPath) {
+          return {
+            status: 400,
+            data: {
+              message: 'Missing required field: projectPath',
+              error: 'MISSING_REQUIRED_FIELD'
+            },
+            headers: { 'content-type': 'application/json' }
+          };
+        }
+
+        // Mock success response for the probe operation
+        const probeFilePath = `${projectPath}/.nexus/qwen-probe/${fileName}`;
+
+        return {
+          status: 200,
+          data: {
+            status: 'success',
+            message: 'Qwen file probe executed successfully',
+            runId,
+            probeFile: probeFilePath
+          },
+          headers: { 'content-type': 'application/json' }
+        };
       }
 
       // Check for authentication specific endpoints and simulate auth errors

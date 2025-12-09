@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# Wrapper script for nexus-agent-tool to run in correct context
+# Get the directory where this script is located (bin directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Get the repo root (parent of bin directory)
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Change to the tools directory to ensure node modules are found
+cd "$REPO_ROOT/tools/agent-tool"
+
+# Run the actual nexus-agent-tool with node from the tools directory
+node dist/index.js "$@"
